@@ -1,0 +1,12 @@
+# Maven
+/target/
+*.class
+
+# Editors / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Local metadata (not part of the package)
+REPO_META.json

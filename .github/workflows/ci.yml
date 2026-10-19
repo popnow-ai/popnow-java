@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor matches maven.compiler.release in the pom; 21 is the current LTS.
+        java-version: ["17", "21"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java-version }}
+          cache: maven
+
+      # Compilation with -Xlint:all (warnings fail the build), the unit tests against a local stub
+      # server, the contract drift check against the published OpenAPI spec, and the English-only
+      # repository guard. No credentials are needed.
+      - name: Verify
+        run: mvn -B verify
+
+      # The pom declares Jackson 2.12 as the floor; also test a current release.
+      - name: Tests against a current Jackson
+        run: mvn -B test -Djackson.version=2.18.2
+
+      # Javadoc with doclint and the sources jar, without signing: the release profile minus GPG.
+      - name: Javadoc
+        run: mvn -B -Prelease -Dgpg.skip verify -DskipTests

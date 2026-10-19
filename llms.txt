@@ -1,0 +1,32 @@
+# popnow-java
+
+> Java SDK (Maven `ai.popnow:popnow-java:0.1.0`, package `ai.popnow`, Java 17+, one dependency: Jackson databind 2.12+) for the PopNow API, which generates AI videos, images, music and speech with models such as Kling, Seedance, Wan, Vidu, MiniMax, Nano Banana, GPT Image, Flux and Suno. Same credits and prices as popnow.ai (1 credit = $0.01).
+
+Install: coming to Maven Central (not published yet); meanwhile `git clone https://github.com/popnow-ai/popnow-java && mvn install -DskipTests`, then depend on `ai.popnow:popnow-java:0.1.0`. Auth: `PopNowClient.builder().apiKey(...)` or `.apiKeyFromEnvironment()` reading `POPNOW_API_KEY` (`sk-popnow-...`, created at https://popnow.ai/api/console/keys). Base URL `https://api.popnow.ai/api/v1`. Every JSON response is `{code, msg, data, request_id}`; `code` 200 is success. Requests carry `User-Agent: popnow-java/0.1.0 (+https://github.com/popnow-ai/popnow-java)`.
+
+## Core usage
+
+- `client.run(CreateTaskRequest.of("alibaba/z-image-turbo/text-to-image", Map.of("prompt", "...")), idempotencyKey)` -> createTask + waitForTerminal; `task.assets().get(0).url()` is a signed link valid ~20 minutes; `task.credits()` is the charge.
+- `client.createTask(request, idempotencyKey)` -> POST /jobs/createTask (retried automatically only with an Idempotency-Key). `CreateTaskOptions.none().withWait(Duration.ofSeconds(30))` holds the request up to 60 s and fills `AcceptedTask.completed()`; `.withRetention(Duration)` sends X-PopNow-Retention.
+- `client.waitForTerminal(taskId)` polls GET /jobs/recordInfo with back-off; `PopNowWaitTimeoutException` is a local timeout, not a failure, and carries the task id.
+- `client.quote(request)` -> POST /jobs/quote; `request.withQuote(quote)` sends `quoteId` and `expectedCredits` = `maxCredits` (40901 if the price moved).
+- `client.getTask`, `retryTask`, `purgeTask`, `listTasks(TaskFilter)` for GET /jobs.
+- `client.listModels(ModelFilter)`, `getModel(id)` (credit price in `ApiModel.credits()`, JSON Schema in `inputSchema()`).
+- Files: `client.uploadFile(Path)` -> `popnow://f/fil_...` (three steps: /common/upload-url, PUT, /files/{id}/commit); `.safetensors` uploads as application/octet-stream; `importLora(url, token)` -> POST /files/import; `createDownloadUrl`.
+- Asset library: `client.assets().create(CreateAssetRequest.fromTaskOutput(taskId, 0))` (Idempotency-Key generated) -> `popnow://a/ast_...`; `list`, `listAll`, `get`, `update`, `delete`, `usage`, `uploadFile`, `characters().list/get`.
+- Account: `getBalance()` (GET /chat/credit, `availableCredits()`), `getUsage(from, to)` (GET /usage).
+- Webhooks: `new CallbackSignatureVerifier(secret).verify(rawBody, headerLookup)` for callBackUrl deliveries (base64 HMAC-SHA256 over `taskId.timestamp.sha256hex(body)`); `new EndpointWebhookVerifier(whsecSecret).verify(rawBody, headerLookup)` for Standard Webhooks account endpoints.
+
+## Errors
+
+Sealed `PopNowException`: `PopNowApiException` (`httpStatus()`, `businessCode()`, `reason()`, `requestId()`, `retryAfter()`, `remediation()`), `PopNowProtocolException`, `PopNowTransportException`, `PopNowTimeoutException`, `PopNowWaitTimeoutException`, `PopNowUploadException`, `PopNowWebhookException`. Branch on `businessCode()`: 400, 40003, 40004, 401, 40201 (insufficient credits), 40202, 403, 40301, 40302, 40303, 40310, 404, 409, 40901, 413, 429, 500, 503, 50301 (retried automatically: 429/5xx/50301), 50302 (refunded; resend with a new idempotency key). Failed generations are tasks with state FAILED and an `errorCode`.
+
+## Links
+
+- Website: https://popnow.ai
+- Docs: https://popnow.ai/docs
+- OpenAPI: https://popnow.ai/docs/openapi.yaml
+- Pricing: https://popnow.ai/pricing
+- MCP server: https://popnow.ai/mcp (remote endpoint https://api.popnow.ai/mcp)
+- Site llms.txt: https://popnow.ai/llms.txt
+- Source: https://github.com/popnow-ai/popnow-java
