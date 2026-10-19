@@ -1,8 +1,9 @@
 name: Publish to Maven Central
 
-# Runs when a version tag (v1.2.3) is pushed. Builds, signs and uploads the release to the Central
-# Portal. autoPublish is off in pom.xml, so the upload waits in the portal until a maintainer presses
-# Publish: a version released to Maven Central can never be withdrawn.
+# Runs when a version tag (v1.2.3) is pushed. Maven builds and signs the artifacts; this workflow
+# assembles the bundle itself and uploads it through the Central Portal API as USER_MANAGED, so the
+# upload waits in the portal until a maintainer presses Publish: a version released to Maven Central
+# can never be withdrawn.
 on:
   push:
     tags: ["v*"]
@@ -21,18 +22,58 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
-          server-id: central
-          server-username: CENTRAL_USERNAME
-          server-password: CENTRAL_PASSWORD
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
       - name: Tag matches the project version
         run: |
           version=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
           test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
-      - name: Build, sign and upload
-        run: mvn -B -Prelease deploy
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Test, build and sign
+        run: mvn -B -Prelease verify
+        env:
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+      - name: Assemble the bundle
+        run: |
+          dir="bundle/ai/popnow/popnow-java/$VERSION"
+          mkdir -p "$dir"
+          base="target/popnow-java-$VERSION"
+          cp "$base.jar" "$base-sources.jar" "$base-javadoc.jar" "$dir/"
+          cp "$base.jar.asc" "$base-sources.jar.asc" "$base-javadoc.jar.asc" "$dir/"
+          # The gpg plugin signs pom.xml as target/<artifact>-<version>.pom.asc.
+          cp pom.xml "$dir/popnow-java-$VERSION.pom"
+          cp "$base.pom.asc" "$dir/"
+          cd "$dir"
+          for f in *.jar *.pom; do
+            md5sum "$f" | cut -d' ' -f1 > "$f.md5"
+            sha1sum "$f" | cut -d' ' -f1 > "$f.sha1"
+          done
+          cd "$GITHUB_WORKSPACE/bundle"
+          zip -qr ../central-bundle.zip ai
+          unzip -l ../central-bundle.zip
+
+      - name: Upload to the Central Portal
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          token=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
+          id=$(curl -fsS -X POST -H "Authorization: Bearer $token" \
+            -F "bundle=@central-bundle.zip" \
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=USER_MANAGED&name=popnow-java-$VERSION")
+          echo "Deployment $id"
+          for i in $(seq 1 60); do
+            status=$(curl -fsS -X POST -H "Authorization: Bearer $token" \
+              "https://central.sonatype.com/api/v1/publisher/status?id=$id")
+            state=$(echo "$status" | jq -r .deploymentState)
+            echo "$state"
+            case "$state" in
+              VALIDATED) echo "Validated. Press Publish in the Central Portal to release."; exit 0 ;;
+              FAILED) echo "$status" | jq .; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for validation"; exit 1
