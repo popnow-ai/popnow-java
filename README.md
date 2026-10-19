@@ -31,7 +31,7 @@ PopNow is a browser-based AI studio for videos, images and music: image-to-video
 
 ## Quickstart
 
-**1. Install.** The artifact is `ai.popnow:popnow-java:0.1.0`. It is **coming to Maven Central** and is not published yet; until then, build it from source (below). Once it is on Central:
+**1. Install** from Maven Central (JDK 17+):
 
 ```xml
 <dependency>
@@ -47,16 +47,6 @@ dependencies {
     implementation("ai.popnow:popnow-java:0.1.0")
 }
 ```
-
-Meanwhile, install it into your local Maven repository from a clone (JDK 17+ and Maven 3.9):
-
-```bash
-git clone https://github.com/popnow-ai/popnow-java.git
-cd popnow-java
-mvn -B install -DskipTests
-```
-
-The coordinates above then resolve from `~/.m2` (Gradle: add `mavenLocal()` to `repositories`).
 
 **2. Create an API key** in the [API console](https://popnow.ai/api/console/keys) and export it:
 
@@ -325,7 +315,7 @@ Signed output links last about 20 minutes; read the task again or call `createDo
 
 ### Is the SDK on Maven Central?
 
-Not yet: `ai.popnow:popnow-java` is coming to Maven Central. Until then, `git clone` this repository and run `mvn install` to use the same coordinates from your local repository.
+Yes: [`ai.popnow:popnow-java`](https://central.sonatype.com/artifact/ai.popnow/popnow-java) on Maven Central, signed with the PopNow release key.
 
 ### Is there an MCP server for ChatGPT or Claude?
 

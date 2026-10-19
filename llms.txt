@@ -2,7 +2,7 @@
 
 > Java SDK (Maven `ai.popnow:popnow-java:0.1.0`, package `ai.popnow`, Java 17+, one dependency: Jackson databind 2.12+) for the PopNow API, which generates AI videos, images, music and speech with models such as Kling, Seedance, Wan, Vidu, MiniMax, Nano Banana, GPT Image, Flux and Suno. Same credits and prices as popnow.ai (1 credit = $0.01).
 
-Install: coming to Maven Central (not published yet); meanwhile `git clone https://github.com/popnow-ai/popnow-java && mvn install -DskipTests`, then depend on `ai.popnow:popnow-java:0.1.0`. Auth: `PopNowClient.builder().apiKey(...)` or `.apiKeyFromEnvironment()` reading `POPNOW_API_KEY` (`sk-popnow-...`, created at https://popnow.ai/api/console/keys). Base URL `https://api.popnow.ai/api/v1`. Every JSON response is `{code, msg, data, request_id}`; `code` 200 is success. Requests carry `User-Agent: popnow-java/0.1.0 (+https://github.com/popnow-ai/popnow-java)`.
+Install: Maven Central `ai.popnow:popnow-java:0.1.0`. Auth: `PopNowClient.builder().apiKey(...)` or `.apiKeyFromEnvironment()` reading `POPNOW_API_KEY` (`sk-popnow-...`, created at https://popnow.ai/api/console/keys). Base URL `https://api.popnow.ai/api/v1`. Every JSON response is `{code, msg, data, request_id}`; `code` 200 is success. Requests carry `User-Agent: popnow-java/0.1.0 (+https://github.com/popnow-ai/popnow-java)`.
 
 ## Core usage
 
