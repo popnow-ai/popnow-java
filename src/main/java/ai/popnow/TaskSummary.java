@@ -22,7 +22,7 @@ import java.util.Optional;
  * @param deadlineAt  the service's execution deadline
  * @param completedAt when the task reached a terminal state; {@code null} while it is in flight
  * @param requestId   the {@code X-Request-Id} of the request that created the task, when recorded
- * @param credits     {@code cost} in credits (1 credit is $0.01)
+ * @param credits     {@code cost} in credits (1 credit is $0.001)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TaskSummary(String taskId, String model, TaskState state, BigDecimal cost, boolean settled,

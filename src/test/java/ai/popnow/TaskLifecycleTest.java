@@ -23,11 +23,11 @@ class TaskLifecycleTest {
 
     private static final String QUOTE = """
             {"quoteId":"qt_signed_token","model":"publisher/model-2.0/text-to-image","estimatedCost":"0.000000045",
-             "maxCharge":"0.09","maxCredits":9,"expectedCredits":1,"currency":"USD","quantity":"5",
+             "maxCharge":"0.09","maxCredits":90,"expectedCredits":1,"currency":"USD","quantity":"5",
              "unit":"per_second","expiresAt":"2036-09-20T08:35:00Z"}""";
 
     private static final String ACCEPTED = """
-            {"taskId":"task_123","state":"queued","estimatedCost":"0.09","estimatedCredits":9,
+            {"taskId":"task_123","state":"queued","estimatedCost":"0.09","estimatedCredits":90,
              "deadlineAt":"2026-09-20T09:00:00Z"}""";
 
     private static CreateTaskRequest request() {
@@ -48,7 +48,7 @@ class TaskLifecycleTest {
 
             assertEquals(new BigDecimal("0.000000045"), quote.estimatedCost());
             assertEquals(new BigDecimal("0.09"), quote.maxCharge());
-            assertEquals(9, quote.maxCredits());
+            assertEquals(90, quote.maxCredits());
             assertFalse(quote.expired(Instant.now()));
             assertTrue(quote.expired(Instant.parse("2037-01-01T00:00:00Z")));
         }
@@ -66,9 +66,9 @@ class TaskLifecycleTest {
 
             JsonNode sent = MAPPER.readTree(server.last("createTask").body());
             assertEquals("qt_signed_token", sent.get("quoteId").asText());
-            assertEquals(9, sent.get("expectedCredits").asLong());
+            assertEquals(90, sent.get("expectedCredits").asLong());
             assertFalse(sent.has("expectedCost"), "credits are confirmed alone");
-            assertEquals(9, accepted.estimatedCredits());
+            assertEquals(90, accepted.estimatedCredits());
             assertTrue(accepted.completed().isEmpty(), "no wait was asked for");
         }
     }
@@ -92,7 +92,7 @@ class TaskLifecycleTest {
     @DisplayName("a server-side wait that finishes returns the terminal record on the acceptance")
     void waitThatFinishes() throws Exception {
         String record = """
-                {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","credits":9,"settled":true,
+                {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","credits":90,"settled":true,
                  "createdAt":"2026-09-20T08:30:00Z","deadlineAt":"2026-09-20T09:00:00Z",
                  "output":{"assets":[{"key":"out-0","url":"https://cdn.example.test/a.png"}]}}""";
         try (StubServer server = new StubServer().on("/api/v1/jobs/createTask",
@@ -103,7 +103,7 @@ class TaskLifecycleTest {
             assertEquals("/api/v1/jobs/createTask?wait=30", server.last("createTask").path());
             TaskRecord done = accepted.completed().orElseThrow();
             assertEquals(TaskState.SUCCEEDED, done.state());
-            assertEquals(9, done.credits());
+            assertEquals(90, done.credits());
             assertEquals("task_123", accepted.taskId());
         }
     }
@@ -112,7 +112,7 @@ class TaskLifecycleTest {
     @DisplayName("a 202 after a wait is the ordinary acceptance, even when a replay reports a terminal state")
     void waitThatRunsOut() throws Exception {
         String replay = """
-                {"taskId":"task_123","state":"succeeded","estimatedCost":"0.09","estimatedCredits":9,
+                {"taskId":"task_123","state":"succeeded","estimatedCost":"0.09","estimatedCredits":90,
                  "deadlineAt":"2026-09-20T09:00:00Z"}""";
         try (StubServer server = new StubServer().on("/api/v1/jobs/createTask",
                 (request, exchange) -> StubServer.respond(exchange, 202, StubServer.envelope(replay)))) {
@@ -120,7 +120,7 @@ class TaskLifecycleTest {
                     CreateTaskOptions.none().withWait(Duration.ofSeconds(5)).withRetention(Duration.ofHours(1)));
 
             assertTrue(accepted.completed().isEmpty(), "only a 200 carries the task record");
-            assertEquals(9, accepted.estimatedCredits());
+            assertEquals(90, accepted.estimatedCredits());
             assertEquals("3600", server.last("createTask").header("X-PopNow-Retention"));
         }
     }

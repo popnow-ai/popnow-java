@@ -36,7 +36,7 @@ import java.util.Optional;
  * @param retention        the removal schedule for this task's content
  * @param requestId        the {@code X-Request-Id} of the request that created this task, when one
  *                         was recorded
- * @param credits          {@code cost} in credits (1 credit is $0.01): the final charge once
+ * @param credits          {@code cost} in credits (1 credit is $0.001): the final charge once
  *                         {@code settled}, otherwise the amount still held
  */
 @JsonIgnoreProperties(ignoreUnknown = true)

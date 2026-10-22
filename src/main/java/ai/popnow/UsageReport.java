@@ -32,7 +32,7 @@ import java.util.List;
  * @param totalSpend settled charges for those tasks
  * @param days       per-day breakdown, sparse: days with no activity are omitted
  * @param models     per-model breakdown, sparse in the same way
- * @param totalCredits {@code totalSpend} in credits (1 credit is $0.01)
+ * @param totalCredits {@code totalSpend} in credits (1 credit is $0.001)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record UsageReport(LocalDate from, LocalDate to, String currency, long totalCalls, BigDecimal totalSpend,

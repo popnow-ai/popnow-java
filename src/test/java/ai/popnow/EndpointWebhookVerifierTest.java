@@ -23,7 +23,7 @@ class EndpointWebhookVerifierTest {
     private static final Clock CLOCK = Clock.fixed(Instant.ofEpochSecond(NOW), ZoneOffset.UTC);
     private static final byte[] BODY = """
             {"type":"task.succeeded","timestamp":"2026-08-18T09:32:11Z","data":{"object":
-            {"taskId":"job_1","model":"m","state":"succeeded","cost":"0.34","credits":34,"settled":true,
+            {"taskId":"job_1","model":"m","state":"succeeded","cost":"0.34","credits":340,"settled":true,
              "createdAt":"2026-08-18T09:30:00Z"}}}""".getBytes(StandardCharsets.UTF_8);
 
     private static EndpointWebhookVerifier verifier() {
@@ -42,7 +42,7 @@ class EndpointWebhookVerifierTest {
 
         assertEquals("msg_1", event.webhookId());
         assertEquals("task.succeeded", event.type());
-        assertEquals(34, event.task().orElseThrow().credits());
+        assertEquals(340, event.task().orElseThrow().credits());
         assertTrue(signature.startsWith("v1,"));
     }
 

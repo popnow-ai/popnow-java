@@ -16,7 +16,7 @@ import java.time.LocalDate;
  * @param failed    how many of them ended without one
  * @param spend     settled charges for that day's tasks. Holds on tasks that have not settled are
  *                  not in here, so a day that is still in flight reads low and rises later
- * @param credits   {@code spend} in credits (1 credit is $0.01)
+ * @param credits   {@code spend} in credits (1 credit is $0.001)
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record UsageByDay(LocalDate day, long calls, long succeeded, long failed, BigDecimal spend, long credits) {

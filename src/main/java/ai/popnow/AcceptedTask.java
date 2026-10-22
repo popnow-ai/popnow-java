@@ -8,7 +8,7 @@ import java.util.Optional;
 /**
  * The service accepted a task. Acceptance is not completion.
  *
- * <p>1 credit is $0.01. {@code estimatedCredits} and {@code estimatedCost} are the same hold,
+ * <p>1 credit is $0.001. {@code estimatedCredits} and {@code estimatedCost} are the same hold,
  * once in credits and once in USD.
  *
  * @param taskId           the identifier to poll, and the one to persist before anything else

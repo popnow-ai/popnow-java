@@ -24,7 +24,7 @@ import java.util.Optional;
  * @param total     {@code available} plus {@code held}
  * @param funding   where the money comes from, broken down by source; {@code null} when the service
  *                  did not include the breakdown
- * @param availableCredits {@code available} in credits (1 credit is $0.01)
+ * @param availableCredits {@code available} in credits (1 credit is $0.001)
  * @param heldCredits      {@code held} in credits
  * @param totalCredits     {@code total} in credits
  */

@@ -4,6 +4,12 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Javadoc, README and the pinned contract describe credits in the current unit (1 credit = $0.001 since 2026-10-19); test fixtures use matching credit and USD pairs. No code change: the SDK reads credit amounts as the API returns them.
+
 ## [0.1.0] - 2026-10-19
 
 First release of the PopNow Java SDK (`ai.popnow:popnow-java`, package `ai.popnow`, Java 17+).

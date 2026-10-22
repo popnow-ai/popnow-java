@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * What a model costs, in credits. 1 credit is $0.01.
+ * What a model costs, in credits. 1 credit is $0.001.
  *
  * <p>The exact amount for one request depends on its input (resolution, duration, count...), so
  * the authoritative number for a request is always {@link PopNowClient#quote}; this is for display

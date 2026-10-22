@@ -33,7 +33,7 @@ import java.util.Set;
  * <p>PopNow generates images, video, music and speech. This client covers the asynchronous media
  * task, from catalogue lookup and price quote through submission, polling, retry and content
  * destruction, plus media upload, LoRA import, download URLs and webhook signature verification.
- * Prices are in credits: 1 credit is $0.01, and API calls and the website share one wallet.
+ * Prices are in credits: 1 credit is $0.001, and API calls and the website share one wallet.
  *
  * <p>Files used again and again belong in the asset library, {@link #assets()}: a saved file keeps
  * a stable {@code popnow://a/...} reference until it is deleted, where an upload's {@code popnow://f/}

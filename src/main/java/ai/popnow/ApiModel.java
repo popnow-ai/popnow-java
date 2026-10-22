@@ -27,7 +27,7 @@ import java.util.Optional;
  * @param enabled                  whether the model is switched on for this account
  * @param available                whether it can currently run
  * @param quantityField            the input field that sets the billable quantity, when one does
- * @param credits                  the price in credits (1 credit is $0.01)
+ * @param credits                  the price in credits (1 credit is $0.001)
  * @param inputSchema              JSON Schema 2020-12 for {@link CreateTaskRequest#input()}.
  *                                 Kept as a {@link JsonNode} because it is a schema document,
  *                                 different for every model, and is meant to be walked or handed

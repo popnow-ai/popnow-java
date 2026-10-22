@@ -169,24 +169,24 @@ class JsonMappingTest {
     @DisplayName("credits are mapped next to the USD amounts on records, quotes and balances")
     void creditsAreMapped() throws Exception {
         TaskRecord record = MAPPER.readValue("""
-                {"taskId":"t","model":"m","state":"succeeded","cost":"0.34","credits":34,"settled":true,
+                {"taskId":"t","model":"m","state":"succeeded","cost":"0.34","credits":340,"settled":true,
                  "createdAt":"2026-10-19T08:30:00Z"}""", TaskRecord.class);
-        assertEquals(34, record.credits());
+        assertEquals(340, record.credits());
         assertEquals(new BigDecimal("0.34"), record.cost());
 
         TaskQuote quote = MAPPER.readValue("""
-                {"quoteId":"q","model":"m","estimatedCost":"0.30","maxCharge":"0.34","maxCredits":34,
-                 "expectedCredits":30,"currency":"USD","quantity":"5","unit":"per_second",
+                {"quoteId":"q","model":"m","estimatedCost":"0.30","maxCharge":"0.34","maxCredits":340,
+                 "expectedCredits":300,"currency":"USD","quantity":"5","unit":"per_second",
                  "expiresAt":"2026-10-19T08:35:00Z"}""", TaskQuote.class);
-        assertEquals(34, quote.maxCredits());
-        assertEquals(30, quote.expectedCredits());
+        assertEquals(340, quote.maxCredits());
+        assertEquals(300, quote.expectedCredits());
 
         Balance balance = MAPPER.readValue("""
-                {"available":"12.50","held":"0.34","total":"12.84","availableCredits":1250,
-                 "heldCredits":34,"totalCredits":1284}""", Balance.class);
-        assertEquals(1250, balance.availableCredits());
-        assertEquals(34, balance.heldCredits());
-        assertEquals(1284, balance.totalCredits());
+                {"available":"12.50","held":"0.34","total":"12.84","availableCredits":12500,
+                 "heldCredits":340,"totalCredits":12840}""", Balance.class);
+        assertEquals(12500, balance.availableCredits());
+        assertEquals(340, balance.heldCredits());
+        assertEquals(12840, balance.totalCredits());
     }
 
     @Test
@@ -216,11 +216,11 @@ class JsonMappingTest {
     @DisplayName("withQuote carries both the token and the confirmed amount")
     void withQuote() {
         TaskQuote quote = new TaskQuote("qt_1", "m", new BigDecimal("0.25"), new BigDecimal("0.30"),
-                "USD", "5", "per_second", Instant.parse("2036-01-01T00:00:00Z"), 30, 25);
+                "USD", "5", "per_second", Instant.parse("2036-01-01T00:00:00Z"), 300, 250);
         CreateTaskRequest request = CreateTaskRequest.of("m", Map.of("prompt", "x")).withQuote(quote);
 
         assertEquals("qt_1", request.quoteId());
-        assertEquals(30L, request.expectedCredits(), "the hold is maxCredits, so that is what is confirmed");
+        assertEquals(300L, request.expectedCredits(), "the hold is maxCredits, so that is what is confirmed");
         assertNull(request.expectedCost(), "credits are sent alone; they win over expectedCost anyway");
         assertThrows(NullPointerException.class, () -> CreateTaskRequest.of("m", Map.of()).withQuote(null));
     }

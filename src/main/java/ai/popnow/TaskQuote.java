@@ -12,7 +12,7 @@ import java.time.Instant;
  * meantime a rejection with business code 40901, raised before any credits are held, rather than
  * a silent charge at the new price.
  *
- * <p>1 credit is $0.01. Every amount is returned twice: as whole credits and as the equivalent USD
+ * <p>1 credit is $0.001. Every amount is returned twice: as whole credits and as the equivalent USD
  * decimal.
  *
  * @param quoteId         opaque signed token; pass it through unchanged and do not log it
