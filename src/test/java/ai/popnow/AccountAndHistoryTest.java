@@ -26,7 +26,8 @@ import org.junit.jupiter.api.Test;
 class AccountAndHistoryTest {
 
     private static final String BALANCE = """
-            {"available":"12.3456","held":"0.9","total":"13.2456",
+            {"available":"12.3456","held":"0.9","total":"13.2456","availableUsd":"12.3456","heldUsd":"0.9",
+             "totalUsd":"13.2456","availableCredits":12345,"heldCredits":900,"totalCredits":13245,
              "funding":{"balanceUsd":"12.3456","heldUsd":"0.9","prepaidAvailableUsd":"2.3456",
               "grantAvailableUsd":"10.00","cashShortfallUsd":"0",
               "credit":{"enabled":true,"limitUsd":"50","availableUsd":"50","usedUsd":"0","heldUsd":"0",
@@ -44,15 +45,16 @@ class AccountAndHistoryTest {
 
     private static final String USAGE = """
             {"from":"2026-09-13","to":"2026-09-20","currency":"USD","totalCalls":3,"totalSpend":"0.27",
-             "days":[{"day":"2026-09-14","calls":2,"succeeded":1,"failed":1,"spend":"0.18"},
-                     {"day":"2026-09-19","calls":1,"succeeded":1,"failed":0,"spend":"0.09"}],
+             "totalCredits":270,
+             "days":[{"day":"2026-09-14","calls":2,"succeeded":1,"failed":1,"spend":"0.18","credits":180},
+                     {"day":"2026-09-19","calls":1,"succeeded":1,"failed":0,"spend":"0.09","credits":90}],
              "models":[{"model":"publisher/model-2.0/text-to-image","calls":3,"succeeded":2,"failed":1,
-                        "spend":"0.27"}]}""";
+                        "spend":"0.27","credits":270}]}""";
 
     private static final String PAGE_ONE = """
             {"items":[
               {"taskId":"task_1","model":"publisher/model-2.0/text-to-image","state":"succeeded","cost":"0.09",
-               "settled":true,"createdAt":"2026-09-19T08:30:00Z","deadlineAt":"2026-09-19T09:00:00Z",
+               "credits":90,"exactCredits":"90","settled":true,"createdAt":"2026-09-19T08:30:00Z","deadlineAt":"2026-09-19T09:00:00Z",
                "completedAt":"2026-09-19T08:31:12Z"},
               {"taskId":"task_2","model":"publisher/model-2.0/text-to-image","state":"running","cost":"0.09",
                "settled":false,"createdAt":"2026-09-19T08:32:00Z","deadlineAt":"2026-09-19T09:02:00Z"}],
@@ -71,9 +73,10 @@ class AccountAndHistoryTest {
         try (StubServer server = new StubServer().onData("/api/v1/chat/credit", BALANCE)) {
             Balance balance = server.client().getBalance();
 
-            assertEquals(new BigDecimal("12.3456"), balance.available());
-            assertEquals(new BigDecimal("0.9"), balance.held());
-            assertEquals(new BigDecimal("13.2456"), balance.total());
+            assertEquals(new BigDecimal("12.3456"), balance.availableUsd());
+            assertEquals(new BigDecimal("0.9"), balance.heldUsd());
+            assertEquals(new BigDecimal("13.2456"), balance.totalUsd());
+            assertEquals(balance.availableUsd(), balance.available(), "the legacy alias carries the same amount");
             assertEquals("/api/v1/chat/credit", server.first("/chat/credit").path());
             assertEquals("GET", server.first("/chat/credit").method());
 

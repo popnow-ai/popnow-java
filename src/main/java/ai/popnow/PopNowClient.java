@@ -33,7 +33,8 @@ import java.util.Set;
  * <p>PopNow generates images, video, music and speech. This client covers the asynchronous media
  * task, from catalogue lookup and price quote through submission, polling, retry and content
  * destruction, plus media upload, LoRA import, download URLs and webhook signature verification.
- * Prices are in credits: 1 credit is $0.001, and API calls and the website share one wallet.
+ * Prices are exact USD decimals charged to the account's API balance, which is separate from the
+ * website's credits; fund it in <a href="https://popnow.ai/api/console/billing">API billing</a>.
  *
  * <p>Files used again and again belong in the asset library, {@link #assets()}: a saved file keeps
  * a stable {@code popnow://a/...} reference until it is deleted, where an upload's {@code popnow://f/}
@@ -51,7 +52,7 @@ import java.util.Set;
  *         "publisher/model/text-to-image", Map.of("prompt", "a paper-cut city at dusk"));
  *
  * TaskQuote quote = client.quote(request);                       // nothing is reserved
- * AcceptedTask accepted = client.createTask(                     // credits are held here
+ * AcceptedTask accepted = client.createTask(                     // quote.maxChargeUsd() is held
  *         request.withQuote(quote), UUID.randomUUID().toString());
  * TaskRecord task = client.waitForTerminal(accepted.taskId());
  *
@@ -60,7 +61,7 @@ import java.util.Set;
  * }</pre>
  *
  * <h2>Costs</h2>
- * Methods that spend credits say so in their own documentation. In short: {@link #quote} and every
+ * Methods that spend from the API balance say so in their own documentation. In short: {@link #quote} and every
  * read are free, {@link #createTask(CreateTaskRequest, String) createTask}, {@link #retryTask} and
  * {@link #run(CreateTaskRequest, String) run} place a hold and lead to
  * a charge, and {@link #purgeTask} destroys content without touching the ledger.
@@ -150,7 +151,7 @@ public final class PopNowClient {
     // The release version, kept equal to the pom's <version> by a unit test. It is a constant
     // rather than read from the JAR manifest so that the User-Agent is right in every runtime,
     // including tests and shaded or repackaged builds where the manifest is gone.
-    static final String CLIENT_VERSION = "0.1.0";
+    static final String CLIENT_VERSION = "0.2.0";
 
     /**
      * The {@code User-Agent} sent on every API request.
@@ -173,7 +174,7 @@ public final class PopNowClient {
     /**
      * The client version, as reported in {@code User-Agent}.
      *
-     * @return the release version of this client, for example {@code 0.1.0}
+     * @return the release version of this client, for example {@code 0.2.0}
      */
     public static String version() {
         return CLIENT_VERSION;
@@ -607,7 +608,7 @@ public final class PopNowClient {
     // ── Catalogue ───────────────────────────────────────────────────────
 
     /**
-     * Lists every model callable with this API key, with its price in credits.
+     * Lists every model callable with this API key, with its API price in USD.
      *
      * <p>Free. Results are cached by the service for one minute.
      *
@@ -660,10 +661,10 @@ public final class PopNowClient {
     // ── Account ─────────────────────────────────────────────────────────
 
     /**
-     * Reads the account's credit balance and held credits.
+     * Reads the account's API balance: available, held and total USD.
      *
-     * <p>Free. Scoped to the account, not to this key: every key on the account, and the website,
-     * spend from the same wallet.
+     * <p>Free. Scoped to the account, not to this key: every key on the account spends from the
+     * same API balance. Website credits are a separate balance and do not appear here.
      *
      * <p>Useful as a budget indicator and as the thing to alert on. It is <b>not</b> a way to
      * decide whether one request will be admitted; {@link #quote} answers that question exactly,
@@ -802,17 +803,17 @@ public final class PopNowClient {
         //
         // The server most likely ignores these fields today, but "most likely" is not a property
         // worth depending on, and obtaining a current price is the entire point of this call.
-        CreateTaskRequest priced =
-                new CreateTaskRequest(request.model(), request.input(), request.callBackUrl(), null, null, null);
+        CreateTaskRequest priced = new CreateTaskRequest(
+                request.model(), request.input(), request.callBackUrl(), null, null, null, null);
         return call("POST", "/jobs/quote", priced, Map.of(), true, requestTimeout, TaskQuote.class);
     }
 
     /**
      * Creates an asynchronous generation task.
      *
-     * <p><b>This reserves funds.</b> Acceptance holds {@link AcceptedTask#estimatedCost()} and that
-     * amount is the ceiling for the eventual charge; unused funds are released when the task
-     * settles. Acceptance is not completion: poll with {@link #waitForTerminal(String)} or receive
+     * <p><b>This reserves funds.</b> Acceptance holds {@link AcceptedTask#estimatedCostUsd()} from
+     * the API balance, and that amount is the ceiling for the eventual charge; unused funds are
+     * released when the task settles. Acceptance is not completion: poll with {@link #waitForTerminal(String)} or receive
      * the terminal record on a callback.
      *
      * <p>Persist {@link AcceptedTask#taskId()} before doing anything else with it. Everything after
@@ -937,7 +938,7 @@ public final class PopNowClient {
             TaskRecord record = map(answer.data(), TaskRecord.class);
             if (record.terminal()) {
                 return new AcceptedTask(record.taskId(), record.state(), null, record.deadlineAt(),
-                        record.sourceTaskId(), 0L, record);
+                        record.sourceTaskId(), 0L, record, null);
             }
         }
         return accepted;

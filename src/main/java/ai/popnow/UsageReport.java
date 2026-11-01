@@ -29,10 +29,11 @@ import java.util.List;
  * @param to         last day of the range, <b>exclusive</b>
  * @param currency   always {@code USD}
  * @param totalCalls tasks created in the range
- * @param totalSpend settled charges for those tasks
+ * @param totalSpend settled charges for those tasks, in exact USD
  * @param days       per-day breakdown, sparse: days with no activity are omitted
  * @param models     per-model breakdown, sparse in the same way
- * @param totalCredits {@code totalSpend} in credits (1 credit is $0.001)
+ * @param totalCredits deprecated display projection of {@code totalSpend} in legacy credits; use
+ *                     {@link #totalSpend()}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record UsageReport(LocalDate from, LocalDate to, String currency, long totalCalls, BigDecimal totalSpend,
@@ -41,5 +42,17 @@ public record UsageReport(LocalDate from, LocalDate to, String currency, long to
     public UsageReport {
         days = Internal.emptyIfNull(days);
         models = Internal.emptyIfNull(models);
+    }
+
+    /**
+     * Settled spend in legacy credits, rounded up.
+     *
+     * @return the deprecated credit projection of {@link #totalSpend()}
+     * @deprecated credits are a display projection, not a billing unit; use {@link #totalSpend()},
+     *             which is in USD
+     */
+    @Deprecated
+    public long totalCredits() {
+        return totalCredits;
     }
 }

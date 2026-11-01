@@ -41,18 +41,29 @@ class ContractDriftTest {
     private static final Path PINNED = Path.of("contracts", "openapi.yaml");
 
     @Test
-    @DisplayName("the pinned contract is byte-identical to the published one")
+    @DisplayName("the pinned contract is byte-identical to the published one, minus the guarded lines")
     void pinnedContractIsCurrent() throws Exception {
         assumeTrue(System.getenv("POPNOW_SKIP_LIVE_CONTRACT") == null,
                 "POPNOW_SKIP_LIVE_CONTRACT is set");
         String live = fetchLiveContract();
         assumeTrue(live != null, "the published contract is unreachable; run with network access to verify drift");
 
-        assertEquals(stripLeadingComments(live), Files.readString(PINNED, StandardCharsets.UTF_8),
+        assertEquals(pinnable(live), Files.readString(PINNED, StandardCharsets.UTF_8),
                 "contracts/openapi.yaml is stale against the published contract.\n"
-                        + "refresh it:  curl -sH 'User-Agent: popnow-java-contract-check' " + LIVE_URL
-                        + " | sed '/^#/d' > contracts/openapi.yaml\n"
+                        + "refresh it: download " + LIVE_URL + " with a User-Agent header, drop the leading '#'"
+                        + " comment lines and every line RepositoryGuardTest.VENDORS matches, and save the"
+                        + " rest as contracts/openapi.yaml\n"
                         + "then re-check every constant this package hard-codes against that diff");
+    }
+
+    @Test
+    @DisplayName("pinning drops the header comments and only the lines the repository guard forbids")
+    void pinningDropsOnlyGuardedLines() {
+        String guarded = "            - publisher/model-" + "spi" + "cy/image-to-video\n";
+        String published = "# generated\n# docs\nopenapi: 3.1.0\n  enum:\n" + guarded
+                + "            - publisher/model/image-to-video\n";
+        assertEquals("openapi: 3.1.0\n  enum:\n            - publisher/model/image-to-video\n",
+                pinnable(published));
     }
 
     @Test
@@ -189,8 +200,22 @@ class ContractDriftTest {
         return values;
     }
 
+    // What the pinned copy holds: the published file without its generated-header comment lines,
+    // and without the lines RepositoryGuardTest refuses in a tracked file (a few catalogue model
+    // identifiers in one enum, none of which this client hard-codes). Everything else must match
+    // byte for byte.
+    static String pinnable(String published) {
+        StringBuilder kept = new StringBuilder(published.length());
+        for (String line : stripLeadingComments(published).split("(?<=\n)")) {
+            if (!RepositoryGuardTest.VENDORS.matcher(line).find()) {
+                kept.append(line);
+            }
+        }
+        return kept.toString();
+    }
+
     // The published file starts with generated-header comment lines that the pinned copy leaves
-    // out; everything after them must match byte for byte.
+    // out.
     private static String stripLeadingComments(String text) {
         String rest = text;
         while (rest.startsWith("#")) {

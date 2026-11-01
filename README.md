@@ -9,7 +9,7 @@
 
   <h1>PopNow Java SDK: AI Video, Image and Music Generation API for Java</h1>
 
-  <p><strong>popnow-java</strong> is a Java 17+ client for the PopNow API that turns text, images and audio into AI videos, images, music and speech, using the same models, prices and credits as <a href="https://popnow.ai">popnow.ai</a>.</p>
+  <p><strong>popnow-java</strong> is a Java 17+ client for the PopNow API that turns text, images and audio into AI videos, images, music and speech, using the same models and prices as <a href="https://popnow.ai">popnow.ai</a>, billed in exact USD from your own API balance.</p>
 
   <p>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
@@ -20,11 +20,11 @@
   </p>
 </div>
 
-PopNow is a browser-based AI studio for videos, images and music: image-to-video, text-to-video, AI images, music and speech, one-tap trending video effects and image styles. This package wraps its developer API (`https://api.popnow.ai/api/v1`) so you can call Kling, Seedance, Wan, Vidu, MiniMax, Nano Banana, GPT Image, Flux, Suno and more from Java, Kotlin or any JVM language. Credit packs, no subscription; failed runs are refunded. *Make it pop.*
+PopNow is a browser-based AI studio for videos, images and music: image-to-video, text-to-video, AI images, music and speech, one-tap trending video effects and image styles. This package wraps its developer API (`https://api.popnow.ai/api/v1`) so you can call Kling, Seedance, Wan, Vidu, MiniMax, Nano Banana, GPT Image, Flux, Suno and more from Java, Kotlin or any JVM language. Pay as you go in USD from a prepaid API balance, no subscription; failed or expired tasks release their hold in full. *Make it pop.*
 
 - **One dependency.** Jackson databind (2.12 or newer, not shaded, so your version wins) and the JDK's own `java.net.http.HttpClient`.
 - **Safe retries.** Back-off with jitter on `429` / `5xx`, honouring `Retry-After`, and only for requests that cannot charge twice: task submissions are retried only under an `Idempotency-Key`.
-- **The whole task workflow.** Quote, create (optionally waiting server-side), poll with back-off, retry, purge, task history, usage and balance, all in credits and USD.
+- **The whole task workflow.** Quote, create (optionally waiting server-side), poll with back-off, retry, purge, task history, usage and balance, with every amount an exact USD `BigDecimal`.
 - **Files and the asset library.** Streamed three-step uploads, LoRA import from Hugging Face or Civitai, `popnow://f/` and `popnow://a/` URIs, saved assets and characters.
 - **Webhook verification** for task callbacks and for Standard Webhooks account endpoints.
 - **Contract-tested** against a pinned copy of the [published OpenAPI spec](https://popnow.ai/docs/openapi.yaml).
@@ -37,18 +37,18 @@ PopNow is a browser-based AI studio for videos, images and music: image-to-video
 <dependency>
   <groupId>ai.popnow</groupId>
   <artifactId>popnow-java</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("ai.popnow:popnow-java:0.1.0")
+    implementation("ai.popnow:popnow-java:0.2.0")
 }
 ```
 
-**2. Create an API key** in the [API console](https://popnow.ai/api/console/keys) and export it:
+**2. Create an API key** in the [API console](https://popnow.ai/api/console/keys), add funds to your API balance in [API billing](https://popnow.ai/api/console/billing) (it starts at $0), and export the key:
 
 ```bash
 export POPNOW_API_KEY="sk-popnow-..."
@@ -72,7 +72,7 @@ public class Quickstart {
         // task instead of generating (and charging) twice.
         TaskRecord task = client.run(request, UUID.randomUUID().toString()); // createTask + waitForTerminal
 
-        System.out.println(task.state() + " for " + task.credits() + " credits");
+        System.out.println(task.state() + " for $" + task.costUsd().toPlainString()); // exact USD
         for (TaskAsset asset : task.assets()) {
             asset.url().ifPresent(System.out::println); // a signed link, valid for about 20 minutes
         }
@@ -93,13 +93,13 @@ public class Quickstart {
 | Asset library | `assets().create`, `uploadFile`, `list`, `listAll`, `get`, `update`, `delete`, `usage`, `characters().list` / `get` | `/api/v1/assets*` |
 | Webhooks | `CallbackSignatureVerifier`, `EndpointWebhookVerifier` | task callbacks and account endpoints |
 
-Models include Kling, Seedance, Wan, Vidu, MiniMax, Nano Banana, GPT Image, Flux, Qwen Image, Seedream, Suno and more across text-to-image, image editing, text-to-video, image-to-video, reference-to-video, video extend, upscaling, text-to-speech, music and speech-to-text. The live list, with each model's input schema and credit price, is `listModels`:
+Models include Kling, Seedance, Wan, Vidu, MiniMax, Nano Banana, GPT Image, Flux, Qwen Image, Seedream, Suno and more across text-to-image, image editing, text-to-video, image-to-video, reference-to-video, video extend, upscaling, text-to-speech, music and speech-to-text. The live list, with each model's input schema and USD price, is `listModels` (also browsable at [popnow.ai/api/models](https://popnow.ai/api/models)):
 
 ```java
 ModelPage models = client.listModels(ModelFilter.all().withModality("video").withTask("image-to-video"));
 for (ApiModel m : models.items()) {
-    if (m.callable() && m.credits() != null) {
-        System.out.println(m.model() + "  " + m.credits().perUnit() + " credits " + m.credits().unit());
+    if (m.callable()) {
+        m.usdPrice().ifPresent(usd -> System.out.println(m.model() + "  $" + usd.perUnit().toPlainString() + " " + usd.unit()));
     }
 }
 
@@ -110,7 +110,7 @@ System.out.println(wan.inputSchema().toPrettyString());
 
 ## Show the price first
 
-`quote` runs the same validation as `createTask` but creates nothing and holds nothing. `withQuote` binds the submission to that price (`quoteId` plus `maxCredits`), so a price that moved is refused with code `40901` instead of charged.
+`quote` runs the same validation as `createTask` but creates nothing and holds nothing. `withQuote` binds the submission to that price (`quoteId` plus `expectedCostUsd` set to the quote's `maxChargeUsd`), so a price that moved is refused with code `40901` instead of charged.
 
 ```java
 CreateTaskRequest request = CreateTaskRequest.of("alibaba/wan-3.0/image-to-video", Map.of(
@@ -120,14 +120,15 @@ CreateTaskRequest request = CreateTaskRequest.of("alibaba/wan-3.0/image-to-video
         "duration_seconds", 5));
 
 TaskQuote quote = client.quote(request);
-System.out.println("at most " + quote.maxCredits() + " credits ($" + quote.maxCharge() + ")");
+System.out.println("about $" + quote.expectedChargeUsd().toPlainString()
+        + ", at most $" + quote.maxChargeUsd().toPlainString());
 
 String key = UUID.randomUUID().toString();               // store it with your job before sending
-AcceptedTask accepted = client.createTask(request.withQuote(quote), key);
-System.out.println("accepted " + accepted.taskId() + ", holding " + accepted.estimatedCredits() + " credits");
+AcceptedTask accepted = client.createTask(request.withQuote(quote), key); // confirms maxChargeUsd
+System.out.println("accepted " + accepted.taskId() + ", holding $" + accepted.estimatedCostUsd().toPlainString());
 ```
 
-1 credit = $0.001. The hold is the ceiling: unused credits are released when the task settles, and failed or expired tasks release the hold in full.
+Amounts are exact USD decimal strings with up to nine decimal places, mapped to `BigDecimal`; print them with `toPlainString()` (plain `toString()` switches to exponent notation for tiny amounts) and keep every digit. `maxChargeUsd` is the hold and the ceiling: unused funds are released when the task settles, and failed or expired tasks release the hold in full. `expectedChargeUsd` is the typical charge, for display only. The integer credit fields from 0.1 (`maxCredits`, `estimatedCredits`, `credits`, `availableCredits`, ...) still parse but are deprecated display projections; read the USD fields instead.
 
 ## Skip the first poll
 
@@ -184,7 +185,7 @@ for (Asset asset : assets.listAll(AssetFilter.all().withKind(AssetKind.VIDEO))) 
 }
 ```
 
-Storage unlocks with your lifetime credit purchases; `assets().usage()` shows the plan and limits. Without a top-up, saving fails with `PopNowApiException.assetErrorReason()` equal to `ASSET_LIBRARY_LOCKED`. A personal key reaches your personal library, a team key that team's shared library. Characters (named, ordered image sets arranged on the website) are read with `assets().characters()`; put `character.uris()` into a model's reference image field.
+Storage unlocks with the account owner's lifetime top-ups; `assets().usage()` shows the plan and limits. Without a top-up, saving fails with `PopNowApiException.assetErrorReason()` equal to `ASSET_LIBRARY_LOCKED`. A personal key reaches your personal library, a team key that team's shared library. Characters (named, ordered image sets arranged on the website) are read with `assets().characters()`; put `character.uris()` into a model's reference image field.
 
 ## Webhooks instead of polling
 
@@ -209,23 +210,24 @@ Account endpoints registered in the console use the [Standard Webhooks](https://
 ## Balance, usage and history
 
 ```java
-Balance balance = client.getBalance();                    // the account's wallet
-System.out.println(balance.availableCredits() + " credits available, " + balance.heldCredits() + " held");
+Balance balance = client.getBalance();                    // the account's API balance, in USD
+System.out.println("$" + balance.availableUsd().toPlainString() + " available, $"
+        + balance.heldUsd().toPlainString() + " held");
 
 UsageReport usage = client.getUsage(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 8)); // this key, [from, to)
-System.out.println(usage.totalCalls() + " calls, " + usage.totalCredits() + " credits");
+System.out.println(usage.totalCalls() + " calls, $" + usage.totalSpend().toPlainString());
 
 // Pin the dates before walking pages, then move only the cursor.
 TaskFilter filter = TaskFilter.all().withRange(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 8));
 TaskPage page = client.listTasks(filter);
 while (true) {
-    page.items().forEach(item -> System.out.println(item.taskId() + " " + item.state() + " " + item.credits()));
+    page.items().forEach(item -> System.out.println(item.taskId() + " " + item.state() + " $" + item.cost().toPlainString()));
     if (!page.hasMore() || page.nextCursor() == null) break;
     page = client.listTasks(filter.withCursor(page.nextCursor()));
 }
 ```
 
-Usage and history are scoped to **this API key**: other keys on the account, and generations started on the website, are not included. Dates are UTC calendar dates in a half-open interval `[from, to)` of at most 92 days. `getUsage` is for reconciliation, not progress: it counts settled charges only and shares an account-wide limit of 30 requests a minute.
+The balance is the account's API balance, separate from the credits used on the website and in the PopNow app: neither pays for the other. Usage and history are scoped to **this API key**: other keys on the account, and generations started on the website, are not included. Dates are UTC calendar dates in a half-open interval `[from, to)` of at most 92 days. `getUsage` is for reconciliation, not progress: it counts settled charges only and shares an account-wide limit of 30 requests a minute.
 
 ## Errors and retries
 
@@ -247,7 +249,7 @@ try {
 } catch (PopNowApiException failure) {
     System.out.println(failure.describe());               // status, code, request id, reason, advice
     if (failure.businessCode() == 40201) {
-        System.out.println("buy credits at https://popnow.ai/pricing");
+        System.out.println("add funds at https://popnow.ai/api/console/billing");
     }
 }
 ```
@@ -260,7 +262,7 @@ Branch on `businessCode()`, never on the message: messages can be translated (`B
 | `40003` | 400 | uploaded bytes do not match their ticket | upload again with a new ticket |
 | `40004` | 400 | valid, but this combination of settings cannot be served now | change the named setting |
 | `401` | 401 | missing, unknown or revoked key | check `POPNOW_API_KEY` |
-| `40201` | 402 | not enough credits for the hold | buy credits, resend |
+| `40201` | 402 | the available API balance cannot cover the hold | add funds in [API billing](https://popnow.ai/api/console/billing), resend |
 | `40202` | 402 | a key spend cap was reached | raise the cap in the console |
 | `40301` / `40302` / `40303` | 403 | key not allowed this model / IP not allowed / region not offered | adjust the key |
 | `40310` | 403 | account email not verified | open the verification link |
@@ -285,7 +287,7 @@ Automatic retries apply only to requests that are safe to repeat: reads, quotes,
 | `pollInterval` / `retryDelays` | 2 s to 15 s / 0.5 s to 8 s |
 | `maxRetries` | 3 |
 
-Every request sends `User-Agent: popnow-java/0.1.0 (+https://github.com/popnow-ai/popnow-java)`. Instances are immutable and thread-safe; build one per process. On the module path the module is `ai.popnow`. Keep the API key on your server: never ship it inside an Android app or a desktop binary.
+Every request sends `User-Agent: popnow-java/0.2.0 (+https://github.com/popnow-ai/popnow-java)`. Instances are immutable and thread-safe; build one per process. On the module path the module is `ai.popnow`. Keep the API key on your server: never ship it inside an Android app or a desktop binary.
 
 ## FAQ
 
@@ -295,7 +297,7 @@ Upload the image with `client.uploadFile(Path.of("photo.png"))` (or use a public
 
 ### How much does a PopNow API call cost?
 
-Each model has a credit price (1 credit = $0.001), shown by `listModels` in `ApiModel.credits()` and on [popnow.ai/pricing](https://popnow.ai/pricing). `client.quote(request)` returns the exact `maxCredits` for one request without spending anything. API calls and the website share one wallet and one price list. Failed tasks are refunded.
+Each model has a USD price per image, second, request or similar unit, shown by `listModels` in `ApiModel.usd()` and on [popnow.ai/api/pricing](https://popnow.ai/api/pricing). `client.quote(request)` returns the exact `maxChargeUsd` for one request without spending anything. API calls are paid from a prepaid API balance in USD, separate from website credits, at the same rate as the same model on popnow.ai. Failed or expired tasks release their hold, so they cost nothing.
 
 ### Which AI models can I call from Java?
 
@@ -317,9 +319,9 @@ Signed output links last about 20 minutes; read the task again or call `createDo
 
 Yes: [`ai.popnow:popnow-java`](https://central.sonatype.com/artifact/ai.popnow/popnow-java) on Maven Central, signed with the PopNow release key.
 
-### Is there an MCP server for ChatGPT or Claude?
+### Is there an MCP server for Claude Code, Cursor or Codex?
 
-Yes: a remote MCP server at `https://api.popnow.ai/mcp` exposes image, video, music and speech tools. See [popnow.ai/mcp](https://popnow.ai/mcp) and [popnow-mcp](https://github.com/popnow-ai/popnow-mcp).
+Yes: the PopNow developer MCP server at `https://api.popnow.ai/api/v1/mcp` gives coding agents the same models with your API key, quoting every paid call in USD before it runs. See [popnow.ai/api/mcp](https://popnow.ai/api/mcp) and [popnow-api-mcp](https://github.com/popnow-ai/popnow-api-mcp) (the `@popnow/mcp` npm bridge covers stdio-only clients). Agent skills for the same API are at [popnow.ai/api/skills](https://popnow.ai/api/skills).
 
 ## Development
 
@@ -327,18 +329,21 @@ Yes: a remote MCP server at `https://api.popnow.ai/mcp` exposes image, video, mu
 mvn -B verify
 ```
 
-The tests run against a local `com.sun.net.httpserver` stub and need no API key. `ContractDriftTest` compares `contracts/openapi.yaml` with the published spec (set `POPNOW_SKIP_LIVE_CONTRACT=1` offline) and re-checks every enum this package hard-codes against it; `RepositoryGuardTest` keeps every tracked file English-only. `mvn -B -Prelease -Dgpg.skip verify` also builds the Javadoc and sources jars.
+The tests run against a local `com.sun.net.httpserver` stub and need no API key. `ContractDriftTest` compares `contracts/openapi.yaml` with the published spec, minus the few catalogue lines the repository guard keeps out of tracked files (set `POPNOW_SKIP_LIVE_CONTRACT=1` offline), and re-checks every enum this package hard-codes against it; `RepositoryGuardTest` keeps every tracked file English-only. `mvn -B -Prelease -Dgpg.skip verify` also builds the Javadoc and sources jars.
 
 ## Links
 
 - Website: [popnow.ai](https://popnow.ai)
 - Docs: [popnow.ai/docs](https://popnow.ai/docs)
 - API reference (OpenAPI): [popnow.ai/docs/openapi.yaml](https://popnow.ai/docs/openapi.yaml)
-- Pricing: [popnow.ai/pricing](https://popnow.ai/pricing)
-- MCP server: [popnow.ai/mcp](https://popnow.ai/mcp)
+- API pricing: [popnow.ai/api/pricing](https://popnow.ai/api/pricing)
+- API models: [popnow.ai/api/models](https://popnow.ai/api/models)
+- API billing (add funds): [popnow.ai/api/console/billing](https://popnow.ai/api/console/billing)
+- Developer MCP server: [popnow.ai/api/mcp](https://popnow.ai/api/mcp)
+- Agent skills: [popnow.ai/api/skills](https://popnow.ai/api/skills)
 - llms.txt: [popnow.ai/llms.txt](https://popnow.ai/llms.txt)
 - Other PopNow SDKs: [Python](https://github.com/popnow-ai/popnow-python), [JavaScript / TypeScript](https://github.com/popnow-ai/popnow-js), [Go](https://github.com/popnow-ai/popnow-go), [PHP](https://github.com/popnow-ai/popnow-php)
-- More PopNow repos: [popnow-mcp](https://github.com/popnow-ai/popnow-mcp), [popnow-skills](https://github.com/popnow-ai/popnow-skills), [popnow-api](https://github.com/popnow-ai/popnow-api), [popnow-cli](https://github.com/popnow-ai/popnow-cli), [popnow-blender](https://github.com/popnow-ai/popnow-blender), [popnow-comfyui](https://github.com/popnow-ai/popnow-comfyui), [n8n-nodes-popnow](https://github.com/popnow-ai/n8n-nodes-popnow)
+- More PopNow repos: [popnow-api-mcp](https://github.com/popnow-ai/popnow-api-mcp), [popnow-skills](https://github.com/popnow-ai/popnow-skills), [popnow-api](https://github.com/popnow-ai/popnow-api), [popnow-cli](https://github.com/popnow-ai/popnow-cli), [popnow-blender](https://github.com/popnow-ai/popnow-blender), [popnow-comfyui](https://github.com/popnow-ai/popnow-comfyui), [n8n-nodes-popnow](https://github.com/popnow-ai/n8n-nodes-popnow)
 
 ## Contributing
 

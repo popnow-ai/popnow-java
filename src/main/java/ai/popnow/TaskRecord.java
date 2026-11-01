@@ -18,9 +18,8 @@ import java.util.Optional;
  * @param output           the result, present once the task has produced one
  * @param errorCode        the identifier to branch on when a task failed
  * @param errorMessage     human-readable failure reason; prose, translated, never to be parsed
- * @param cost             the final charge in USD once {@code settled}, otherwise the amount still
- *                         held
- * @param settled          whether {@code cost} is final. On success the charge is capped at the
+ * @param cost             legacy USD alias of {@code costUsd}
+ * @param settled          whether {@code costUsd} is final. On success the charge is capped at the
  *                         hold and unused funds are released; a failed or expired task normally
  *                         releases the hold in full. The one exception is a
  *                         {@code content_rejected} task on a model whose page states that such
@@ -36,15 +35,63 @@ import java.util.Optional;
  * @param retention        the removal schedule for this task's content
  * @param requestId        the {@code X-Request-Id} of the request that created this task, when one
  *                         was recorded
- * @param credits          {@code cost} in credits (1 credit is $0.001): the final charge once
- *                         {@code settled}, otherwise the amount still held
+ * @param credits          deprecated display projection of {@code costUsd} in legacy credits,
+ *                         rounded up; use {@link #costUsd()}
+ * @param costUsd          the exact final charge in USD once {@code settled}, otherwise the exact
+ *                         amount still held. Keep every digit for reconciliation
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TaskRecord(String taskId, String sourceTaskId, String model, TaskState state, JsonNode input,
                          TaskOutput output, TaskErrorCode errorCode, String errorMessage, BigDecimal cost,
                          boolean settled, Instant createdAt, Instant deadlineAt, Instant completedAt,
                          String contentState, String contentRemovedBy, Instant purgedAt,
-                         TaskRetention retention, String requestId, long credits) {
+                         TaskRetention retention, String requestId, long credits, BigDecimal costUsd) {
+
+    /**
+     * The 0.1 shape, without {@code costUsd}.
+     *
+     * @param taskId           the task identifier
+     * @param sourceTaskId     the retried task, when this is a retry
+     * @param model            the endpoint this task ran on
+     * @param state            the lifecycle state
+     * @param input            normalized model input
+     * @param output           the result
+     * @param errorCode        the failure identifier
+     * @param errorMessage     the failure reason
+     * @param cost             legacy USD alias of the charge or hold
+     * @param settled          whether {@code cost} is final
+     * @param createdAt        when the task was accepted
+     * @param deadlineAt       the service's execution deadline
+     * @param completedAt      when the task reached a terminal state
+     * @param contentState     whether the content is still stored
+     * @param contentRemovedBy who removed the content
+     * @param purgedAt         when the content was destroyed
+     * @param retention        the removal schedule
+     * @param requestId        the request that created this task
+     * @param credits          the charge or hold in legacy credits
+     * @deprecated use the canonical constructor, which also takes {@code costUsd}
+     */
+    @Deprecated
+    public TaskRecord(String taskId, String sourceTaskId, String model, TaskState state, JsonNode input,
+                      TaskOutput output, TaskErrorCode errorCode, String errorMessage, BigDecimal cost,
+                      boolean settled, Instant createdAt, Instant deadlineAt, Instant completedAt,
+                      String contentState, String contentRemovedBy, Instant purgedAt,
+                      TaskRetention retention, String requestId, long credits) {
+        this(taskId, sourceTaskId, model, state, input, output, errorCode, errorMessage, cost, settled,
+                createdAt, deadlineAt, completedAt, contentState, contentRemovedBy, purgedAt, retention,
+                requestId, credits, null);
+    }
+
+    /**
+     * The charge or hold in legacy credits, rounded up.
+     *
+     * @return the deprecated credit projection of {@link #costUsd()}
+     * @deprecated credits are a display projection, not a billing unit; use {@link #costUsd()}
+     */
+    @Deprecated
+    public long credits() {
+        return credits;
+    }
 
     /**
      * Whether the task has finished, whatever the outcome.

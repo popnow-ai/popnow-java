@@ -6,9 +6,44 @@ All notable changes to this package are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-01
+
+The PopNow API bills in exact USD from its own API balance, separate from website credits. This
+release reads and confirms those USD amounts. It is backwards compatible: every 0.1 constructor,
+accessor and credit field still works.
+
+### Added
+
+- `TaskQuote.maxChargeUsd()` (the exact hold, and the amount to confirm) and
+  `TaskQuote.expectedChargeUsd()` (the typical charge, informational).
+- `CreateTaskRequest.expectedCostUsd()`, sent as `expectedCostUsd`.
+- `AcceptedTask.estimatedCostUsd()`, `TaskRecord.costUsd()`, and `Balance.availableUsd()`,
+  `heldUsd()` and `totalUsd()`.
+- `ApiModel.usd()` / `usdPrice()` with the new `ModelUsd` rate snapshot: unit, per-unit price,
+  billing blocks, chat token prices, long-context tier and price rules, all as exact USD.
+
 ### Changed
 
-- Javadoc, README and the pinned contract describe credits in the current unit (1 credit = $0.001 since 2026-10-19); test fixtures use matching credit and USD pairs. No code change: the SDK reads credit amounts as the API returns them.
+- `CreateTaskRequest.withQuote(quote)` now sends `quoteId` and `expectedCostUsd` set to the quote's
+  `maxChargeUsd`, and no longer sends `expectedCredits`.
+- The `40201` remediation points to API billing (`https://popnow.ai/api/console/billing`), and the
+  `40901` remediation to `expectedCostUsd`.
+- README, llms.txt and Javadoc use USD and the separate API balance. MCP links point to the
+  developer MCP server (`https://api.popnow.ai/api/v1/mcp`, `https://popnow.ai/api/mcp`,
+  `popnow-ai/popnow-api-mcp`) and the agent skills page `https://popnow.ai/api/skills`.
+- The pinned contract is the current published one. The drift check leaves out the few catalogue
+  lines the repository guard keeps out of tracked files; none of them is a value this client
+  hard-codes.
+
+### Deprecated
+
+- Credit fields, which are display projections and not billing units: `TaskQuote.maxCredits()` and
+  `expectedCredits()`, `CreateTaskRequest.expectedCredits()`, `AcceptedTask.estimatedCredits()`,
+  `TaskRecord.credits()`, `TaskSummary.credits()`, `Balance.availableCredits()`, `heldCredits()` and
+  `totalCredits()`, `UsageReport.totalCredits()`, `UsageByDay.credits()`, `UsageByModel.credits()`,
+  `ApiModel.credits()`, `ModelCredits` and `ModelCreditRule`.
+- `CreateTaskRequest.expectedCost()`, the legacy name of `expectedCostUsd`.
+- The 0.1 constructors of the records that gained a USD component.
 
 ## [0.1.0] - 2026-10-19
 
@@ -39,4 +74,5 @@ First release of the PopNow Java SDK (`ai.popnow:popnow-java`, package `ai.popno
 - Tests: local stub server, contract drift check against a pinned OpenAPI copy, and an
   English-only and naming guard over every tracked file.
 
+[0.2.0]: https://github.com/popnow-ai/popnow-java/releases/tag/v0.2.0
 [0.1.0]: https://github.com/popnow-ai/popnow-java/releases/tag/v0.1.0

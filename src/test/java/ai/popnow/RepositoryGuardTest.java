@@ -27,8 +27,9 @@ class RepositoryGuardTest {
     // Han, Hiragana/Katakana and Hangul.
     private static final Pattern CJK = Pattern.compile("[\\x{4e00}-\\x{9fff}\\x{3040}-\\x{30ff}\\x{ac00}-\\x{d7af}]");
 
-    // Assembled from parts so this file does not match its own scan.
-    private static final Pattern VENDORS = Pattern.compile(String.join("|",
+    // Assembled from parts so this file does not match its own scan. ContractDriftTest drops the
+    // lines it matches from the published contract before pinning it.
+    static final Pattern VENDORS = Pattern.compile(String.join("|",
             "spi" + "cy", "k" + "ie\\.ai", "\\bk" + "ie\\b", "wave" + "speed", "atlas" + "cloud",
             "found" + "ation/"), Pattern.CASE_INSENSITIVE);
 

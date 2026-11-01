@@ -2,6 +2,7 @@ package ai.popnow;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,13 +23,14 @@ class TaskLifecycleTest {
     private static final ObjectMapper MAPPER = PopNowClient.newObjectMapper();
 
     private static final String QUOTE = """
-            {"quoteId":"qt_signed_token","model":"publisher/model-2.0/text-to-image","estimatedCost":"0.000000045",
-             "maxCharge":"0.09","maxCredits":90,"expectedCredits":1,"currency":"USD","quantity":"5",
+            {"quoteId":"qt_signed_token","model":"publisher/model-2.0/text-to-image","estimatedCost":"0.090000045",
+             "maxCharge":"0.090000045","maxChargeUsd":"0.090000045","expectedChargeUsd":"0.000000045",
+             "expectedCharge":"0.000000045","maxCredits":91,"expectedCredits":1,"currency":"USD","quantity":"5",
              "unit":"per_second","expiresAt":"2036-09-20T08:35:00Z"}""";
 
     private static final String ACCEPTED = """
-            {"taskId":"task_123","state":"queued","estimatedCost":"0.09","estimatedCredits":90,
-             "deadlineAt":"2026-09-20T09:00:00Z"}""";
+            {"taskId":"task_123","state":"queued","estimatedCost":"0.090000045","estimatedCostUsd":"0.090000045",
+             "estimatedCredits":91,"deadlineAt":"2026-09-20T09:00:00Z"}""";
 
     private static CreateTaskRequest request() {
         return CreateTaskRequest.of("publisher/model-2.0/text-to-image", Map.of("prompt", "a paper-cut city"));
@@ -46,17 +48,17 @@ class TaskLifecycleTest {
         try (StubServer server = new StubServer().onData("/api/v1/jobs/quote", QUOTE)) {
             TaskQuote quote = server.client().quote(request());
 
-            assertEquals(new BigDecimal("0.000000045"), quote.estimatedCost());
-            assertEquals(new BigDecimal("0.09"), quote.maxCharge());
-            assertEquals(90, quote.maxCredits());
+            assertEquals(new BigDecimal("0.090000045"), quote.maxChargeUsd());
+            assertEquals(new BigDecimal("0.000000045"), quote.expectedChargeUsd());
+            assertEquals(new BigDecimal("0.090000045"), quote.maxCharge());
             assertFalse(quote.expired(Instant.now()));
             assertTrue(quote.expired(Instant.parse("2037-01-01T00:00:00Z")));
         }
     }
 
     @Test
-    @DisplayName("a bound quote sends its token and maxCredits, and the hold comes back in credits")
-    void quoteIsBoundByCredits() throws Exception {
+    @DisplayName("a bound quote sends its token and maxChargeUsd as expectedCostUsd, and the hold comes back in USD")
+    void quoteIsBoundByUsd() throws Exception {
         try (StubServer server = new StubServer()
                 .onData("/api/v1/jobs/quote", QUOTE)
                 .onData("/api/v1/jobs/createTask", ACCEPTED)) {
@@ -66,15 +68,18 @@ class TaskLifecycleTest {
 
             JsonNode sent = MAPPER.readTree(server.last("createTask").body());
             assertEquals("qt_signed_token", sent.get("quoteId").asText());
-            assertEquals(90, sent.get("expectedCredits").asLong());
-            assertFalse(sent.has("expectedCost"), "credits are confirmed alone");
-            assertEquals(90, accepted.estimatedCredits());
+            assertTrue(sent.get("expectedCostUsd").isTextual(), "amounts travel as strings, never as JSON numbers");
+            assertEquals("0.090000045", sent.get("expectedCostUsd").asText());
+            assertFalse(sent.has("expectedCredits"), "credits are no longer sent");
+            assertFalse(sent.has("expectedCost"), "the legacy alias is not sent next to expectedCostUsd");
+            assertEquals(new BigDecimal("0.090000045"), accepted.estimatedCostUsd());
             assertTrue(accepted.completed().isEmpty(), "no wait was asked for");
         }
     }
 
     @Test
-    @DisplayName("expectedCost is sent as a plain decimal string, not 4.5E-8")
+    @SuppressWarnings("deprecation")
+    @DisplayName("the legacy expectedCost alias is still sent as a plain decimal string, not 4.5E-8")
     void expectedCostSerialization() throws Exception {
         try (StubServer server = new StubServer().onData("/api/v1/jobs/createTask", ACCEPTED)) {
             CreateTaskRequest priced = new CreateTaskRequest(request().model(), request().input(), null,
@@ -92,8 +97,8 @@ class TaskLifecycleTest {
     @DisplayName("a server-side wait that finishes returns the terminal record on the acceptance")
     void waitThatFinishes() throws Exception {
         String record = """
-                {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","credits":90,"settled":true,
-                 "createdAt":"2026-09-20T08:30:00Z","deadlineAt":"2026-09-20T09:00:00Z",
+                {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","costUsd":"0.09","credits":90,
+                 "exactCredits":"90","settled":true,"createdAt":"2026-09-20T08:30:00Z","deadlineAt":"2026-09-20T09:00:00Z",
                  "output":{"assets":[{"key":"out-0","url":"https://cdn.example.test/a.png"}]}}""";
         try (StubServer server = new StubServer().on("/api/v1/jobs/createTask",
                 (request, exchange) -> StubServer.respond(exchange, 200, StubServer.envelope(record)))) {
@@ -103,7 +108,8 @@ class TaskLifecycleTest {
             assertEquals("/api/v1/jobs/createTask?wait=30", server.last("createTask").path());
             TaskRecord done = accepted.completed().orElseThrow();
             assertEquals(TaskState.SUCCEEDED, done.state());
-            assertEquals(90, done.credits());
+            assertEquals(new BigDecimal("0.09"), done.costUsd());
+            assertNull(accepted.estimatedCostUsd(), "a finished task has a real cost instead of a hold");
             assertEquals("task_123", accepted.taskId());
         }
     }
@@ -112,15 +118,15 @@ class TaskLifecycleTest {
     @DisplayName("a 202 after a wait is the ordinary acceptance, even when a replay reports a terminal state")
     void waitThatRunsOut() throws Exception {
         String replay = """
-                {"taskId":"task_123","state":"succeeded","estimatedCost":"0.09","estimatedCredits":90,
-                 "deadlineAt":"2026-09-20T09:00:00Z"}""";
+                {"taskId":"task_123","state":"succeeded","estimatedCost":"0.09","estimatedCostUsd":"0.09",
+                 "estimatedCredits":90,"deadlineAt":"2026-09-20T09:00:00Z"}""";
         try (StubServer server = new StubServer().on("/api/v1/jobs/createTask",
                 (request, exchange) -> StubServer.respond(exchange, 202, StubServer.envelope(replay)))) {
             AcceptedTask accepted = server.client().createTask(request(), "idem-key-1",
                     CreateTaskOptions.none().withWait(Duration.ofSeconds(5)).withRetention(Duration.ofHours(1)));
 
             assertTrue(accepted.completed().isEmpty(), "only a 200 carries the task record");
-            assertEquals(90, accepted.estimatedCredits());
+            assertEquals(new BigDecimal("0.09"), accepted.estimatedCostUsd());
             assertEquals("3600", server.last("createTask").header("X-PopNow-Retention"));
         }
     }
@@ -280,7 +286,7 @@ class TaskLifecycleTest {
             String pending = n == 3 ? "true" : "false";
             String url = n == 3 ? "null" : "\"https://cdn.example.test/a.png?sig=x\"";
             StubServer.respond(exchange, 200, StubServer.envelope("""
-                    {"taskId":"task_123","model":"publisher/model-2.0/text-to-image","state":"%s","cost":"0.09",
+                    {"taskId":"task_123","model":"publisher/model-2.0/text-to-image","state":"%s","cost":"0.09","costUsd":"0.09",
                      "settled":%s,"createdAt":"2026-09-20T08:30:00Z","deadlineAt":"2026-09-20T09:00:00Z",
                      "output":{"text":"a written answer","assets":[{"key":"out-0","url":%s,"mime":"image/png",
                      "pending":%s,"unavailable":false,"width":1024,"height":1024,"bytes":812345}]},
@@ -308,7 +314,7 @@ class TaskLifecycleTest {
     @DisplayName("a state this release does not know stops the poll loop instead of spinning to the timeout")
     void unknownStateStopsTheLoop() throws Exception {
         try (StubServer server = new StubServer().onData("/api/v1/jobs/recordInfo", """
-                {"taskId":"task_123","model":"m","state":"quarantined","cost":"0","settled":false,
+                {"taskId":"task_123","model":"m","state":"quarantined","cost":"0","costUsd":"0","settled":false,
                  "createdAt":"2026-09-20T08:30:00Z"}""")) {
             PopNowApiException failure = assertThrows(PopNowApiException.class,
                     () -> server.client().waitForTerminal("task_123", Duration.ofSeconds(5)));
@@ -347,7 +353,7 @@ class TaskLifecycleTest {
         };
 
         try (StubServer server = new StubServer().onData("/api/v1/jobs/recordInfo", """
-                {"taskId":"task_123","model":"m","state":"running","cost":"0.09","settled":false,
+                {"taskId":"task_123","model":"m","state":"running","cost":"0.09","costUsd":"0.09","settled":false,
                  "createdAt":"2026-09-20T08:30:00Z"}""")) {
             PopNowClient client = server.clientBuilder().clock(stepping).build();
             PopNowWaitTimeoutException timeout = assertThrows(PopNowWaitTimeoutException.class,
@@ -398,7 +404,7 @@ class TaskLifecycleTest {
         };
 
         try (StubServer server = new StubServer().onData("/api/v1/jobs/recordInfo", """
-                {"taskId":"task_123","model":"m","state":"running","cost":"0.09","settled":false,
+                {"taskId":"task_123","model":"m","state":"running","cost":"0.09","costUsd":"0.09","settled":false,
                  "createdAt":"2026-09-20T08:30:00Z"}""")) {
             PopNowClient client = server.clientBuilder().clock(stepping).build();
             PopNowWaitTimeoutException timeout = assertThrows(PopNowWaitTimeoutException.class,
@@ -438,7 +444,7 @@ class TaskLifecycleTest {
                 }
             }
             StubServer.respond(exchange, 200, StubServer.envelope("""
-                    {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","settled":true,
+                    {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","costUsd":"0.09","settled":true,
                      "createdAt":"2026-09-20T08:30:00Z"}"""));
         })) {
             PopNowClient client = server.clientBuilder()
@@ -460,7 +466,7 @@ class TaskLifecycleTest {
     void waitTimeoutKeepsTheLastRecord() {
         TaskRecord last = new TaskRecord("task_123", null, "m", TaskState.RUNNING, null, null, null, null,
                 new BigDecimal("0.09"), false, Instant.parse("2026-09-20T08:30:00Z"), null, null,
-                null, null, null, null, null, 9);
+                null, null, null, null, null, 9, new BigDecimal("0.09"));
         PopNowWaitTimeoutException timeout =
                 new PopNowWaitTimeoutException("task_123", Duration.ofMinutes(10), last);
 
@@ -620,7 +626,7 @@ class TaskLifecycleTest {
                     polls.incrementAndGet();
                     now.set(now.get().plusSeconds(2));
                     StubServer.respond(exchange, 200, StubServer.envelope("""
-                            {"taskId":"task_123","model":"m","state":"running","cost":"0.09","settled":false,
+                            {"taskId":"task_123","model":"m","state":"running","cost":"0.09","costUsd":"0.09","settled":false,
                              "createdAt":"2026-09-20T08:30:00Z"}"""));
                 })) {
             PopNowClient client = server.clientBuilder()
@@ -680,7 +686,7 @@ class TaskLifecycleTest {
                     // fail - a test that hangs proves nothing, it just drags CI to its timeout.
                     now.set(now.get().plusSeconds(2));
                     StubServer.respond(exchange, 200, StubServer.envelope("""
-                            {"taskId":"task_123","model":"m","state":"running","cost":"0.09","settled":false,
+                            {"taskId":"task_123","model":"m","state":"running","cost":"0.09","costUsd":"0.09","settled":false,
                              "createdAt":"2026-09-20T08:30:00Z"}"""));
                 })) {
             PopNowClient client = server.clientBuilder()

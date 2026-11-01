@@ -13,8 +13,21 @@ import java.math.BigDecimal;
  * @param succeeded how many of them produced a result
  * @param failed    how many of them ended without one
  * @param spend     settled charges for those tasks; unsettled holds are not counted
- * @param credits   {@code spend} in credits (1 credit is $0.001)
+ * @param credits   deprecated display projection of {@code spend} in legacy credits; use
+ *                  {@link #spend()}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record UsageByModel(String model, long calls, long succeeded, long failed, BigDecimal spend, long credits) {
+
+    /**
+     * Settled spend in legacy credits, rounded up.
+     *
+     * @return the deprecated credit projection of {@link #spend()}
+     * @deprecated credits are a display projection, not a billing unit; use {@link #spend()}, which
+     *             is in USD
+     */
+    @Deprecated
+    public long credits() {
+        return credits;
+    }
 }

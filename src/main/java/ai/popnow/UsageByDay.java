@@ -16,8 +16,21 @@ import java.time.LocalDate;
  * @param failed    how many of them ended without one
  * @param spend     settled charges for that day's tasks. Holds on tasks that have not settled are
  *                  not in here, so a day that is still in flight reads low and rises later
- * @param credits   {@code spend} in credits (1 credit is $0.001)
+ * @param credits   deprecated display projection of {@code spend} in legacy credits; use
+ *                  {@link #spend()}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record UsageByDay(LocalDate day, long calls, long succeeded, long failed, BigDecimal spend, long credits) {
+
+    /**
+     * Settled spend in legacy credits, rounded up.
+     *
+     * @return the deprecated credit projection of {@link #spend()}
+     * @deprecated credits are a display projection, not a billing unit; use {@link #spend()}, which
+     *             is in USD
+     */
+    @Deprecated
+    public long credits() {
+        return credits;
+    }
 }

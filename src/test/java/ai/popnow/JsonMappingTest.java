@@ -166,13 +166,47 @@ class JsonMappingTest {
     }
 
     @Test
-    @DisplayName("credits are mapped next to the USD amounts on records, quotes and balances")
-    void creditsAreMapped() throws Exception {
+    @DisplayName("exact USD amounts are mapped on records, quotes, acceptances and balances")
+    void usdAmountsAreMapped() throws Exception {
+        TaskRecord record = MAPPER.readValue("""
+                {"taskId":"t","model":"m","state":"succeeded","cost":"0.340000001","costUsd":"0.340000001",
+                 "credits":341,"exactCredits":"340.000001","settled":true,"createdAt":"2026-10-19T08:30:00Z"}""",
+                TaskRecord.class);
+        assertEquals(new BigDecimal("0.340000001"), record.costUsd(), "nine decimal places survive");
+        assertEquals(new BigDecimal("0.340000001"), record.cost());
+
+        TaskQuote quote = MAPPER.readValue("""
+                {"quoteId":"q","model":"m","estimatedCost":"0.34","maxCharge":"0.34","maxChargeUsd":"0.34",
+                 "expectedChargeUsd":"0.3","expectedCharge":"0.3","maxCredits":340,"expectedCredits":300,
+                 "currency":"USD","quantity":"5","unit":"per_second","expiresAt":"2026-10-19T08:35:00Z"}""",
+                TaskQuote.class);
+        assertEquals(new BigDecimal("0.34"), quote.maxChargeUsd());
+        assertEquals(new BigDecimal("0.3"), quote.expectedChargeUsd());
+
+        AcceptedTask accepted = MAPPER.readValue("""
+                {"taskId":"t","state":"queued","estimatedCost":"0.34","estimatedCostUsd":"0.34",
+                 "estimatedCredits":340,"deadlineAt":"2026-10-19T08:45:00Z"}""", AcceptedTask.class);
+        assertEquals(new BigDecimal("0.34"), accepted.estimatedCostUsd());
+
+        Balance balance = MAPPER.readValue("""
+                {"available":"-1.5","held":"0.34","total":"-1.16","availableUsd":"-1.5","heldUsd":"0.34",
+                 "totalUsd":"-1.16","availableCredits":-1500,"heldCredits":340,"totalCredits":-1160}""",
+                Balance.class);
+        assertEquals(new BigDecimal("-1.5"), balance.availableUsd(), "an API balance can be negative");
+        assertEquals(new BigDecimal("0.34"), balance.heldUsd());
+        assertEquals(new BigDecimal("-1.16"), balance.totalUsd());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    @DisplayName("the deprecated credit fields of a 0.1-era response still parse")
+    void legacyCreditsStillParse() throws Exception {
         TaskRecord record = MAPPER.readValue("""
                 {"taskId":"t","model":"m","state":"succeeded","cost":"0.34","credits":340,"settled":true,
                  "createdAt":"2026-10-19T08:30:00Z"}""", TaskRecord.class);
         assertEquals(340, record.credits());
         assertEquals(new BigDecimal("0.34"), record.cost());
+        assertNull(record.costUsd(), "absent USD fields read as null, not as zero");
 
         TaskQuote quote = MAPPER.readValue("""
                 {"quoteId":"q","model":"m","estimatedCost":"0.30","maxCharge":"0.34","maxCredits":340,
@@ -181,12 +215,47 @@ class JsonMappingTest {
         assertEquals(340, quote.maxCredits());
         assertEquals(300, quote.expectedCredits());
 
+        AcceptedTask accepted = MAPPER.readValue("""
+                {"taskId":"t","state":"queued","estimatedCost":"0.34","estimatedCredits":340}""",
+                AcceptedTask.class);
+        assertEquals(340, accepted.estimatedCredits());
+
         Balance balance = MAPPER.readValue("""
                 {"available":"12.50","held":"0.34","total":"12.84","availableCredits":12500,
                  "heldCredits":340,"totalCredits":12840}""", Balance.class);
         assertEquals(12500, balance.availableCredits());
         assertEquals(340, balance.heldCredits());
         assertEquals(12840, balance.totalCredits());
+
+        TaskSummary row = MAPPER.readValue("""
+                {"taskId":"t","model":"m","state":"succeeded","cost":"0.34","credits":340,"settled":true}""",
+                TaskSummary.class);
+        assertEquals(340, row.credits());
+
+        UsageReport usage = MAPPER.readValue("""
+                {"from":"2026-10-01","to":"2026-10-02","currency":"USD","totalCalls":1,"totalSpend":"0.34",
+                 "totalCredits":340,"days":[{"day":"2026-10-01","calls":1,"succeeded":1,"failed":0,
+                 "spend":"0.34","credits":340}],"models":[{"model":"m","calls":1,"succeeded":1,"failed":0,
+                 "spend":"0.34","credits":340}]}""", UsageReport.class);
+        assertEquals(340, usage.totalCredits());
+        assertEquals(340, usage.days().get(0).credits());
+        assertEquals(340, usage.models().get(0).credits());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    @DisplayName("the 0.1 constructors still compile and leave the USD fields empty")
+    void legacyConstructorsStillWork() {
+        TaskQuote quote = new TaskQuote("qt_1", "m", new BigDecimal("0.30"), new BigDecimal("0.30"),
+                "USD", "5", "per_second", Instant.parse("2036-01-01T00:00:00Z"), 300, 250);
+        assertNull(quote.maxChargeUsd());
+
+        CreateTaskRequest request = new CreateTaskRequest("m", Map.of("prompt", "x"), null, "qt_1",
+                null, 300L);
+        assertEquals(300L, request.expectedCredits());
+        assertNull(request.expectedCostUsd());
+
+        assertNull(new Balance(BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ONE, null, 1000, 0, 1000).availableUsd());
     }
 
     @Test
@@ -213,16 +282,45 @@ class JsonMappingTest {
     }
 
     @Test
-    @DisplayName("withQuote carries both the token and the confirmed amount")
+    @SuppressWarnings("deprecation")
+    @DisplayName("withQuote carries the token and the quote's maxChargeUsd, never credits")
     void withQuote() {
-        TaskQuote quote = new TaskQuote("qt_1", "m", new BigDecimal("0.25"), new BigDecimal("0.30"),
-                "USD", "5", "per_second", Instant.parse("2036-01-01T00:00:00Z"), 300, 250);
-        CreateTaskRequest request = CreateTaskRequest.of("m", Map.of("prompt", "x")).withQuote(quote);
+        TaskQuote quote = new TaskQuote("qt_1", "m", new BigDecimal("0.3"), new BigDecimal("0.3"),
+                "USD", "5", "per_second", Instant.parse("2036-01-01T00:00:00Z"), 300, 250,
+                new BigDecimal("0.300000001"), new BigDecimal("0.25"));
+        CreateTaskRequest stale = new CreateTaskRequest("m", Map.of("prompt", "x"), null, "qt_0",
+                new BigDecimal("9"), 9000L, new BigDecimal("9"));
+        CreateTaskRequest request = stale.withQuote(quote);
 
         assertEquals("qt_1", request.quoteId());
-        assertEquals(300L, request.expectedCredits(), "the hold is maxCredits, so that is what is confirmed");
-        assertNull(request.expectedCost(), "credits are sent alone; they win over expectedCost anyway");
+        assertEquals(new BigDecimal("0.300000001"), request.expectedCostUsd(),
+                "the hold is maxChargeUsd, so that is what is confirmed");
+        assertNull(request.expectedCredits(), "a previous credit confirmation is dropped");
+        assertNull(request.expectedCost(), "the legacy alias is not sent next to expectedCostUsd");
         assertThrows(NullPointerException.class, () -> CreateTaskRequest.of("m", Map.of()).withQuote(null));
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    @DisplayName("a quote without USD fields falls back to maxCharge, the same amount")
+    void withQuoteFallsBackToMaxCharge() {
+        TaskQuote quote = new TaskQuote("qt_1", "m", new BigDecimal("0.3"), new BigDecimal("0.3"),
+                "USD", "5", "per_second", Instant.parse("2036-01-01T00:00:00Z"), 300, 250);
+
+        assertEquals(new BigDecimal("0.3"), CreateTaskRequest.of("m", Map.of("prompt", "x"))
+                .withQuote(quote).expectedCostUsd());
+    }
+
+    @Test
+    @DisplayName("expectedCostUsd is written as a plain decimal string, never exponent notation")
+    void expectedCostUsdIsAPlainString() throws Exception {
+        TaskQuote quote = new TaskQuote("qt_1", "m", null, null, "USD", "1", "per_image",
+                Instant.parse("2036-01-01T00:00:00Z"), 1, 1, new BigDecimal("0.000000001"), null);
+        String json = MAPPER.writeValueAsString(CreateTaskRequest.of("m", Map.of("prompt", "x")).withQuote(quote));
+
+        assertTrue(json.contains("\"expectedCostUsd\":\"0.000000001\""), json);
+        assertFalse(json.contains("expectedCredits"), json);
+        assertFalse(json.contains("\"expectedCost\""), json);
     }
 
     @Test

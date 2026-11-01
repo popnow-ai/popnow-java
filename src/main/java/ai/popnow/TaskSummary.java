@@ -15,19 +15,32 @@ import java.util.Optional;
  * @param taskId      the task identifier, which is what {@link PopNowClient#getTask(String)} takes
  * @param model       the public model identifier the task ran on
  * @param state       the lifecycle state at the moment the page was read
- * @param cost        the final charge once {@code settled} is true, and the amount still held
- *                    before that. An unsettled row is a ceiling, not a bill
+ * @param cost        the exact final charge in USD once {@code settled} is true, and the amount
+ *                    still held before that. An unsettled row is a ceiling, not a bill
  * @param settled     whether {@code cost} is final
  * @param createdAt   when the task was accepted
  * @param deadlineAt  the service's execution deadline
  * @param completedAt when the task reached a terminal state; {@code null} while it is in flight
  * @param requestId   the {@code X-Request-Id} of the request that created the task, when recorded
- * @param credits     {@code cost} in credits (1 credit is $0.001)
+ * @param credits     deprecated display projection of {@code cost} in legacy credits, rounded
+ *                    up; use {@link #cost()}
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record TaskSummary(String taskId, String model, TaskState state, BigDecimal cost, boolean settled,
                           Instant createdAt, Instant deadlineAt, Instant completedAt, String requestId,
                           long credits) {
+
+    /**
+     * The charge or hold in legacy credits, rounded up.
+     *
+     * @return the deprecated credit projection of {@link #cost()}
+     * @deprecated credits are a display projection, not a billing unit; use {@link #cost()}, which
+     *             is in USD
+     */
+    @Deprecated
+    public long credits() {
+        return credits;
+    }
 
     /**
      * Whether the task has finished, whatever the outcome.

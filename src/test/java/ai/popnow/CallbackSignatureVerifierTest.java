@@ -23,7 +23,7 @@ class CallbackSignatureVerifierTest {
     private static final String SECRET = "whsec_test_key";
 
     private static final String V2_BODY = StubServer.envelope("""
-            {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","settled":true,
+            {"taskId":"task_123","model":"m","state":"succeeded","cost":"0.09","costUsd":"0.09","settled":true,
              "createdAt":"2026-09-20T08:30:00Z","output":{"assets":[]}}""");
 
     private static final String V1_BODY =

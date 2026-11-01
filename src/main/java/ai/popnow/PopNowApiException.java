@@ -204,13 +204,14 @@ public final class PopNowApiException extends PopNowException {
             case 40004 -> "The request is valid but no deployment serves this exact parameter combination. "
                     + "Change the parameter named in the message and submit again; an unchanged retry fails "
                     + "identically.";
-            case 40201 -> "Not enough credits for the hold. Buy credits at https://popnow.ai/pricing, then submit again.";
+            case 40201 -> "The available API balance cannot cover this task's hold. Add funds at "
+                    + "https://popnow.ai/api/console/billing, then submit again.";
             case 40202 -> "A spend cap was reached. Raise the cap or wait for the next window.";
             case 40310 -> "The account has not verified its email address, so it cannot run models yet. Open "
                     + "the verification link sent at sign-up, or send a new one from the Console; the same "
                     + "key starts working once the address is verified.";
             case 40901 -> "The quote expired or the request changed after it was quoted. Quote again and send "
-                    + "the new quoteId and expectedCredits.";
+                    + "the new quoteId and expectedCostUsd (the quote's maxChargeUsd).";
             case 50301 -> "This model has no usable deployment or effective price at the moment. Back off and "
                     + "retry, or select another model.";
             case 50302 -> "A synchronous generation failed and the charge was already refunded. Retry "

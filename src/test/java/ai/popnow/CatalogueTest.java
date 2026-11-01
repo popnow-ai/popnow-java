@@ -20,6 +20,8 @@ class CatalogueTest {
              "async":true,"taskTimeoutSeconds":600,
              "enabled":true,"available":true,"quantityField":"duration_seconds","credits":{"unit":"per_second",
              "perUnit":9,"rules":[{"when":{"resolution":"1080p"},"perUnit":13.5}]},
+             "usd":{"unit":"per_second","perUnit":"0.009","currency":"USD","blocks":{"seconds":5,"min":1,"cap":4},
+             "rules":[{"when":{"resolution":"1080p"},"perUnit":"0.0135"}]},
              "inputSchema":{"type":"object","required":["prompt"]},"version":"v7","availability":"available",
              "badges":["commercial_use","brand_new_badge_from_the_future"],"relatedModels":[],
              "updatedAt":"2026-09-20T08:30:00Z","someFieldAddedNextYear":{"nested":true}}]}""";
@@ -28,7 +30,9 @@ class CatalogueTest {
             {"model":"publisher/model-2.0/text-to-image","family":"publisher/model-2.0","displayName":"Model 2.0",
              "provider":"publisher","modality":"image","tasks":["text-to-image"],"async":true,
              "taskTimeoutSeconds":600,"enabled":true,"available":false,
-             "quantityField":"","credits":{"unit":"per_image","perUnit":4},"inputSchema":{},"version":"v7","availability":"maintenance",
+             "quantityField":"","credits":{"unit":"per_image","perUnit":4},
+             "usd":{"unit":"per_image","perUnit":"0.004","currency":"USD"},
+             "inputSchema":{},"version":"v7","availability":"maintenance",
              "badges":[],"relatedModels":[],"updatedAt":"2026-09-20T08:30:00Z"}""";
 
     private static StubServer catalogue() throws IOException {
@@ -49,12 +53,16 @@ class CatalogueTest {
             ApiModel model = page.items().get(0);
             assertTrue(model.callable(), "enabled and available means callable");
             assertEquals("text-to-image", model.task().orElseThrow());
-            assertEquals("per_second", model.credits().unit());
-            assertEquals(0, new BigDecimal("9").compareTo(model.credits().perUnit()));
-            assertEquals(0, new BigDecimal("13.5").compareTo(model.credits().rules().get(0).perUnit()),
-                    "a fractional credit price survives mapping");
-            assertEquals("1080p", model.credits().rules().get(0).when().path("resolution").asText());
-            assertTrue(model.credits().rules().get(0).ownUnit().isEmpty());
+            ModelUsd usd = model.usdPrice().orElseThrow();
+            assertEquals("per_second", usd.unit());
+            assertEquals("USD", usd.currency());
+            assertEquals(new BigDecimal("0.009"), usd.perUnit());
+            assertEquals(new BigDecimal("0.0135"), usd.rules().get(0).perUnit(),
+                    "a USD price string survives mapping digit for digit");
+            assertEquals("1080p", usd.rules().get(0).when().path("resolution").asText());
+            assertTrue(usd.rules().get(0).ownUnit().isEmpty());
+            assertEquals(5, usd.billingBlocks().orElseThrow().seconds());
+            assertEquals(4, usd.billingBlocks().orElseThrow().cap());
             assertEquals(Instant.parse("2026-09-20T08:30:00Z"), model.updatedAt());
             assertTrue(model.inputSchema().has("required"), "the schema stays a tree, not fixed fields");
             assertTrue(model.badges().contains("brand_new_badge_from_the_future"),
@@ -84,7 +92,7 @@ class CatalogueTest {
             assertEquals("Bearer sk-popnow-0123456789abcdef", request.header("Authorization"));
             assertEquals("de", request.header("Accept-Language"));
             assertEquals("application/json", request.header("Accept"));
-            assertEquals("popnow-java/0.1.0 (+https://github.com/popnow-ai/popnow-java)",
+            assertEquals("popnow-java/0.2.0 (+https://github.com/popnow-ai/popnow-java)",
                     request.header("User-Agent"),
                     "an explicit User-Agent: the edge refuses some default client agents outright");
         }
@@ -98,8 +106,41 @@ class CatalogueTest {
 
             assertEquals("/api/v1/models/publisher%2Fmodel-2.0%2Ftext-to-image", server.last("/models/").path());
             assertFalse(model.callable(), "available=false is not callable however enabled it is");
-            assertTrue(model.credits().rules().isEmpty(), "a missing rules array reads as empty");
+            assertTrue(model.usd().rules().isEmpty(), "a missing rules array reads as empty");
+            assertTrue(model.usd().billingBlocks().isEmpty());
         }
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    @DisplayName("the deprecated credit price still maps next to the USD one")
+    void legacyCreditPrice() throws Exception {
+        try (StubServer server = catalogue()) {
+            ApiModel model = server.client().listModels().items().get(0);
+
+            assertEquals("per_second", model.credits().unit());
+            assertEquals(0, new BigDecimal("9").compareTo(model.credits().perUnit()));
+            assertEquals(0, new BigDecimal("13.5").compareTo(model.credits().rules().get(0).perUnit()),
+                    "a fractional credit price survives mapping");
+            assertTrue(model.credits().rules().get(0).ownUnit().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("a chat model's token prices and long-context tier map as exact USD")
+    void chatTokenPrices() throws Exception {
+        ModelUsd usd = PopNowClient.newObjectMapper().readValue("""
+                {"unit":"per_million_tokens","currency":"USD","input":"0.3","output":"2.5","cachedInput":"0.03",
+                 "cacheWrite":"0.375","longContext":{"thresholdTokens":200000,"inclusive":false,"input":"0.6",
+                 "output":"5","cachedInput":"0.06","cacheWrite":"0.75"}}""", ModelUsd.class);
+
+        assertEquals(new BigDecimal("0.3"), usd.input());
+        assertEquals(new BigDecimal("2.5"), usd.output());
+        assertEquals(new BigDecimal("0.03"), usd.cachedInput());
+        assertEquals(new BigDecimal("0.375"), usd.cacheWrite());
+        assertEquals(200_000L, usd.longContext().thresholdTokens());
+        assertEquals(new BigDecimal("0.6"), usd.longContext().input());
+        assertTrue(usd.rules().isEmpty());
     }
 
     @Test
