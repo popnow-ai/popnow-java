@@ -1,0 +1,76 @@
+name: Publish validated Maven deployment
+
+# An explicit maintainer action completes a previously validated USER_MANAGED upload.
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: Validated Central Portal deployment UUID
+        required: true
+        type: string
+      version:
+        description: Exact ai.popnow:popnow-java version to publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Verify the deployment coordinates and publish
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          DEPLOYMENT_ID: ${{ inputs.deployment_id }}
+          VERSION: ${{ inputs.version }}
+        shell: python
+        run: |
+          import base64
+          import json
+          import os
+          import re
+          import time
+          import urllib.request
+
+          deployment = os.environ["DEPLOYMENT_ID"]
+          version = os.environ["VERSION"]
+          if not re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", deployment):
+              raise SystemExit("Invalid deployment UUID")
+          if not re.fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+", version):
+              raise SystemExit("Expected an exact stable version")
+          token = base64.b64encode((os.environ["CENTRAL_USERNAME"] + ":" + os.environ["CENTRAL_PASSWORD"]).encode()).decode()
+          headers = {"Authorization": "Bearer " + token}
+          base = "https://central.sonatype.com/api/v1/publisher/"
+          expected = "pkg:maven/ai.popnow/popnow-java@" + version
+
+          def status():
+              request = urllib.request.Request(base + "status?id=" + deployment, headers=headers, method="POST")
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  result = json.load(response)
+              if set(result.get("purls", [])) != {expected}:
+                  raise SystemExit("Deployment coordinates differ from the requested package and version")
+              return result["deploymentState"]
+
+          state = status()
+          if state == "VALIDATED":
+              request = urllib.request.Request(base + "deployment/" + deployment, headers=headers, method="POST")
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  if response.status != 204:
+                      raise SystemExit("Unexpected publish response")
+          elif state not in {"PUBLISHING", "PUBLISHED"}:
+              raise SystemExit("Deployment is not ready to publish: " + state)
+          for attempt in range(120):
+              state = status()
+              print(expected + " " + state, flush=True)
+              if state == "PUBLISHED":
+                  break
+              if state != "PUBLISHING":
+                  raise SystemExit("Unexpected deployment state: " + state)
+              time.sleep(10)
+          else:
+              raise SystemExit("Timed out waiting for Maven Central publication")
