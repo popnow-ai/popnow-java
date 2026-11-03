@@ -52,8 +52,9 @@ jobs:
               request = urllib.request.Request(base + "status?id=" + deployment, headers=headers, method="POST")
               with urllib.request.urlopen(request, timeout=60) as response:
                   result = json.load(response)
-              if set(result.get("purls", [])) != {expected}:
-                  raise SystemExit("Deployment coordinates differ from the requested package and version")
+              purls = result.get("purls", [])
+              if not purls or any(not isinstance(value, str) or value.split("?", 1)[0] != expected for value in purls):
+                  raise SystemExit("Deployment coordinates differ from the requested package and version: " + json.dumps(purls))
               return result["deploymentState"]
 
           state = status()
