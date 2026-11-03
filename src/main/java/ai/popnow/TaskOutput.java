@@ -15,7 +15,12 @@ import java.util.List;
  *                   endpoints that report it; {@code null} everywhere else
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TaskOutput(String text, List<TaskAsset> assets, TaskTranscript transcript) {
+public record TaskOutput(String text, List<TaskAsset> assets, TaskTranscript transcript, EmbeddingBatch embeddings) {
+
+    /** Source-compatible constructor for existing text and media callers. */
+    public TaskOutput(String text, List<TaskAsset> assets, TaskTranscript transcript) {
+        this(text, assets, transcript, null);
+    }
 
     // Text-only outputs carry no assets field; normalise it to an empty list.
     public TaskOutput {

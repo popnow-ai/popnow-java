@@ -33,7 +33,12 @@ import java.util.Optional;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ModelUsd(String unit, BigDecimal perUnit, Blocks blocks, BigDecimal input, BigDecimal output,
                        BigDecimal cachedInput, BigDecimal cacheWrite, LongContext longContext,
-                       List<Rule> rules, String currency) {
+                       List<Rule> rules, String currency, JsonNode perMillionTokens) {
+
+    public ModelUsd(String unit, BigDecimal perUnit, Blocks blocks, BigDecimal input, BigDecimal output,
+                    BigDecimal cachedInput, BigDecimal cacheWrite, LongContext longContext, List<Rule> rules, String currency) {
+        this(unit, perUnit, blocks, input, output, cachedInput, cacheWrite, longContext, rules, currency, null);
+    }
 
     public ModelUsd {
         rules = Internal.emptyIfNull(rules);

@@ -92,7 +92,7 @@ class CatalogueTest {
             assertEquals("Bearer sk-popnow-0123456789abcdef", request.header("Authorization"));
             assertEquals("de", request.header("Accept-Language"));
             assertEquals("application/json", request.header("Accept"));
-            assertEquals("popnow-java/0.2.0 (+https://github.com/popnow-ai/popnow-java)",
+            assertEquals("popnow-java/0.3.0 (+https://github.com/popnow-ai/popnow-java)",
                     request.header("User-Agent"),
                     "an explicit User-Agent: the edge refuses some default client agents outright");
         }

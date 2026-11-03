@@ -151,7 +151,7 @@ public final class PopNowClient {
     // The release version, kept equal to the pom's <version> by a unit test. It is a constant
     // rather than read from the JAR manifest so that the User-Agent is right in every runtime,
     // including tests and shaded or repackaged builds where the manifest is gone.
-    static final String CLIENT_VERSION = "0.2.0";
+    static final String CLIENT_VERSION = "0.3.0";
 
     /**
      * The {@code User-Agent} sent on every API request.
