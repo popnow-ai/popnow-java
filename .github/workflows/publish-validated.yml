@@ -36,6 +36,7 @@ jobs:
           import re
           import time
           import urllib.request
+          import xml.etree.ElementTree as ET
 
           deployment = os.environ["DEPLOYMENT_ID"]
           version = os.environ["VERSION"]
@@ -53,11 +54,23 @@ jobs:
               with urllib.request.urlopen(request, timeout=60) as response:
                   result = json.load(response)
               purls = result.get("purls", [])
-              if not purls or any(not isinstance(value, str) or value.split("?", 1)[0] != expected for value in purls):
+              if purls and any(not isinstance(value, str) or value.split("?", 1)[0] != expected for value in purls):
                   raise SystemExit("Deployment coordinates differ from the requested package and version: " + json.dumps(purls))
               return result["deploymentState"]
 
           state = status()
+          # VALIDATED responses may omit purls; verify the uploaded POM before publication.
+          relative = "ai/popnow/popnow-java/" + version + "/popnow-java-" + version + ".pom"
+          pom_url = base + "deployment/" + deployment + "/download/" + relative
+          if state == "PUBLISHED":
+              pom_url = "https://repo.maven.apache.org/maven2/" + relative
+          request = urllib.request.Request(pom_url, headers=headers if state != "PUBLISHED" else {})
+          with urllib.request.urlopen(request, timeout=60) as response:
+              pom = ET.fromstring(response.read())
+          namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+          coordinate = tuple(pom.findtext("m:" + field, namespaces=namespace) for field in ["groupId", "artifactId", "version"])
+          if coordinate != ("ai.popnow", "popnow-java", version):
+              raise SystemExit("Uploaded POM has unexpected coordinates: " + repr(coordinate))
           if state == "VALIDATED":
               request = urllib.request.Request(base + "deployment/" + deployment, headers=headers, method="POST")
               with urllib.request.urlopen(request, timeout=60) as response:
